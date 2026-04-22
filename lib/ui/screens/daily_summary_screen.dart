@@ -16,20 +16,30 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
   bool _isSyncing = false;
   bool _verSoloPendientes = false;
 
-  Future<void> _ejecutarSincronizacion(BuildContext context) async {
-    final syncService = Provider.of<SyncService>(context, listen: false);
+  Future<void> _ejecutarSincronizacion(BuildContext contextParam) async {
+    final syncService = Provider.of<SyncService>(contextParam, listen: false);
     setState(() => _isSyncing = true);
-    
+
     try {
       await syncService.sincronizarVentas();
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Sincronización Exitosa')),
-      );
+      if (!mounted || !context.mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('✅ Sincronización Exitosa')));
     } catch (e) {
-      if (!context.mounted) return;
+      if (!mounted || !context.mounted) return;
+
+      String mensaje = '❌ No se pudo sincronizar. ';
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('host lookup')) {
+        mensaje += 'Revisa tu conexión a internet.';
+      } else {
+        mensaje += 'Error: $e';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _isSyncing = false);
