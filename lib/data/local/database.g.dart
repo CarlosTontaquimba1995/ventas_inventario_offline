@@ -36,12 +36,23 @@ class $ProductosTable extends Productos
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _precioCompraMeta = const VerificationMeta(
+    'precioCompra',
+  );
+  @override
+  late final GeneratedColumn<double> precioCompra = GeneratedColumn<double>(
+    'precio_compra',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _stockLocalMeta = const VerificationMeta(
     'stockLocal',
   );
   @override
   late final GeneratedColumn<int> stockLocal = GeneratedColumn<int>(
-    'stock_local',
+    'stock_total',
     aliasedName,
     false,
     type: DriftSqlType.int,
@@ -49,7 +60,13 @@ class $ProductosTable extends Productos
     defaultValue: const Constant(0),
   );
   @override
-  List<GeneratedColumn> get $columns => [id, nombre, precio, stockLocal];
+  List<GeneratedColumn> get $columns => [
+    id,
+    nombre,
+    precio,
+    precioCompra,
+    stockLocal,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -83,10 +100,19 @@ class $ProductosTable extends Productos
     } else if (isInserting) {
       context.missing(_precioMeta);
     }
-    if (data.containsKey('stock_local')) {
+    if (data.containsKey('precio_compra')) {
+      context.handle(
+        _precioCompraMeta,
+        precioCompra.isAcceptableOrUnknown(
+          data['precio_compra']!,
+          _precioCompraMeta,
+        ),
+      );
+    }
+    if (data.containsKey('stock_total')) {
       context.handle(
         _stockLocalMeta,
-        stockLocal.isAcceptableOrUnknown(data['stock_local']!, _stockLocalMeta),
+        stockLocal.isAcceptableOrUnknown(data['stock_total']!, _stockLocalMeta),
       );
     }
     return context;
@@ -110,9 +136,13 @@ class $ProductosTable extends Productos
         DriftSqlType.double,
         data['${effectivePrefix}precio'],
       )!,
+      precioCompra: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}precio_compra'],
+      ),
       stockLocal: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
-        data['${effectivePrefix}stock_local'],
+        data['${effectivePrefix}stock_total'],
       )!,
     );
   }
@@ -127,11 +157,13 @@ class Producto extends DataClass implements Insertable<Producto> {
   final String id;
   final String nombre;
   final double precio;
+  final double? precioCompra;
   final int stockLocal;
   const Producto({
     required this.id,
     required this.nombre,
     required this.precio,
+    this.precioCompra,
     required this.stockLocal,
   });
   @override
@@ -140,7 +172,10 @@ class Producto extends DataClass implements Insertable<Producto> {
     map['id'] = Variable<String>(id);
     map['nombre'] = Variable<String>(nombre);
     map['precio'] = Variable<double>(precio);
-    map['stock_local'] = Variable<int>(stockLocal);
+    if (!nullToAbsent || precioCompra != null) {
+      map['precio_compra'] = Variable<double>(precioCompra);
+    }
+    map['stock_total'] = Variable<int>(stockLocal);
     return map;
   }
 
@@ -149,6 +184,9 @@ class Producto extends DataClass implements Insertable<Producto> {
       id: Value(id),
       nombre: Value(nombre),
       precio: Value(precio),
+      precioCompra: precioCompra == null && nullToAbsent
+          ? const Value.absent()
+          : Value(precioCompra),
       stockLocal: Value(stockLocal),
     );
   }
@@ -162,6 +200,7 @@ class Producto extends DataClass implements Insertable<Producto> {
       id: serializer.fromJson<String>(json['id']),
       nombre: serializer.fromJson<String>(json['nombre']),
       precio: serializer.fromJson<double>(json['precio']),
+      precioCompra: serializer.fromJson<double?>(json['precioCompra']),
       stockLocal: serializer.fromJson<int>(json['stockLocal']),
     );
   }
@@ -172,6 +211,7 @@ class Producto extends DataClass implements Insertable<Producto> {
       'id': serializer.toJson<String>(id),
       'nombre': serializer.toJson<String>(nombre),
       'precio': serializer.toJson<double>(precio),
+      'precioCompra': serializer.toJson<double?>(precioCompra),
       'stockLocal': serializer.toJson<int>(stockLocal),
     };
   }
@@ -180,11 +220,13 @@ class Producto extends DataClass implements Insertable<Producto> {
     String? id,
     String? nombre,
     double? precio,
+    Value<double?> precioCompra = const Value.absent(),
     int? stockLocal,
   }) => Producto(
     id: id ?? this.id,
     nombre: nombre ?? this.nombre,
     precio: precio ?? this.precio,
+    precioCompra: precioCompra.present ? precioCompra.value : this.precioCompra,
     stockLocal: stockLocal ?? this.stockLocal,
   );
   Producto copyWithCompanion(ProductosCompanion data) {
@@ -192,6 +234,9 @@ class Producto extends DataClass implements Insertable<Producto> {
       id: data.id.present ? data.id.value : this.id,
       nombre: data.nombre.present ? data.nombre.value : this.nombre,
       precio: data.precio.present ? data.precio.value : this.precio,
+      precioCompra: data.precioCompra.present
+          ? data.precioCompra.value
+          : this.precioCompra,
       stockLocal: data.stockLocal.present
           ? data.stockLocal.value
           : this.stockLocal,
@@ -204,13 +249,14 @@ class Producto extends DataClass implements Insertable<Producto> {
           ..write('id: $id, ')
           ..write('nombre: $nombre, ')
           ..write('precio: $precio, ')
+          ..write('precioCompra: $precioCompra, ')
           ..write('stockLocal: $stockLocal')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, nombre, precio, stockLocal);
+  int get hashCode => Object.hash(id, nombre, precio, precioCompra, stockLocal);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -218,6 +264,7 @@ class Producto extends DataClass implements Insertable<Producto> {
           other.id == this.id &&
           other.nombre == this.nombre &&
           other.precio == this.precio &&
+          other.precioCompra == this.precioCompra &&
           other.stockLocal == this.stockLocal);
 }
 
@@ -225,12 +272,14 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
   final Value<String> id;
   final Value<String> nombre;
   final Value<double> precio;
+  final Value<double?> precioCompra;
   final Value<int> stockLocal;
   final Value<int> rowid;
   const ProductosCompanion({
     this.id = const Value.absent(),
     this.nombre = const Value.absent(),
     this.precio = const Value.absent(),
+    this.precioCompra = const Value.absent(),
     this.stockLocal = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -238,6 +287,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     required String id,
     required String nombre,
     required double precio,
+    this.precioCompra = const Value.absent(),
     this.stockLocal = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
@@ -247,6 +297,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     Expression<String>? id,
     Expression<String>? nombre,
     Expression<double>? precio,
+    Expression<double>? precioCompra,
     Expression<int>? stockLocal,
     Expression<int>? rowid,
   }) {
@@ -254,7 +305,8 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
       if (id != null) 'id': id,
       if (nombre != null) 'nombre': nombre,
       if (precio != null) 'precio': precio,
-      if (stockLocal != null) 'stock_local': stockLocal,
+      if (precioCompra != null) 'precio_compra': precioCompra,
+      if (stockLocal != null) 'stock_total': stockLocal,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -263,6 +315,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     Value<String>? id,
     Value<String>? nombre,
     Value<double>? precio,
+    Value<double?>? precioCompra,
     Value<int>? stockLocal,
     Value<int>? rowid,
   }) {
@@ -270,6 +323,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
       id: id ?? this.id,
       nombre: nombre ?? this.nombre,
       precio: precio ?? this.precio,
+      precioCompra: precioCompra ?? this.precioCompra,
       stockLocal: stockLocal ?? this.stockLocal,
       rowid: rowid ?? this.rowid,
     );
@@ -287,8 +341,11 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     if (precio.present) {
       map['precio'] = Variable<double>(precio.value);
     }
+    if (precioCompra.present) {
+      map['precio_compra'] = Variable<double>(precioCompra.value);
+    }
     if (stockLocal.present) {
-      map['stock_local'] = Variable<int>(stockLocal.value);
+      map['stock_total'] = Variable<int>(stockLocal.value);
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -302,6 +359,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
           ..write('id: $id, ')
           ..write('nombre: $nombre, ')
           ..write('precio: $precio, ')
+          ..write('precioCompra: $precioCompra, ')
           ..write('stockLocal: $stockLocal, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -1006,6 +1064,7 @@ typedef $$ProductosTableCreateCompanionBuilder =
       required String id,
       required String nombre,
       required double precio,
+      Value<double?> precioCompra,
       Value<int> stockLocal,
       Value<int> rowid,
     });
@@ -1014,6 +1073,7 @@ typedef $$ProductosTableUpdateCompanionBuilder =
       Value<String> id,
       Value<String> nombre,
       Value<double> precio,
+      Value<double?> precioCompra,
       Value<int> stockLocal,
       Value<int> rowid,
     });
@@ -1065,6 +1125,11 @@ class $$ProductosTableFilterComposer
 
   ColumnFilters<double> get precio => $composableBuilder(
     column: $table.precio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get precioCompra => $composableBuilder(
+    column: $table.precioCompra,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1123,6 +1188,11 @@ class $$ProductosTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get precioCompra => $composableBuilder(
+    column: $table.precioCompra,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get stockLocal => $composableBuilder(
     column: $table.stockLocal,
     builder: (column) => ColumnOrderings(column),
@@ -1146,6 +1216,11 @@ class $$ProductosTableAnnotationComposer
 
   GeneratedColumn<double> get precio =>
       $composableBuilder(column: $table.precio, builder: (column) => column);
+
+  GeneratedColumn<double> get precioCompra => $composableBuilder(
+    column: $table.precioCompra,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get stockLocal => $composableBuilder(
     column: $table.stockLocal,
@@ -1209,12 +1284,14 @@ class $$ProductosTableTableManager
                 Value<String> id = const Value.absent(),
                 Value<String> nombre = const Value.absent(),
                 Value<double> precio = const Value.absent(),
+                Value<double?> precioCompra = const Value.absent(),
                 Value<int> stockLocal = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProductosCompanion(
                 id: id,
                 nombre: nombre,
                 precio: precio,
+                precioCompra: precioCompra,
                 stockLocal: stockLocal,
                 rowid: rowid,
               ),
@@ -1223,12 +1300,14 @@ class $$ProductosTableTableManager
                 required String id,
                 required String nombre,
                 required double precio,
+                Value<double?> precioCompra = const Value.absent(),
                 Value<int> stockLocal = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProductosCompanion.insert(
                 id: id,
                 nombre: nombre,
                 precio: precio,
+                precioCompra: precioCompra,
                 stockLocal: stockLocal,
                 rowid: rowid,
               ),

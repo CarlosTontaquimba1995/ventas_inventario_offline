@@ -1,187 +1,160 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:ventas_inventario_offline/data/services/services/sync_service.dart';
 import '../../data/local/database.dart';
+import '../../data/services/services/sync_service.dart';
 
-class DailySummaryScreen extends StatefulWidget {
+class DailySummaryScreen extends StatelessWidget {
   const DailySummaryScreen({super.key});
-
-  @override
-  State<DailySummaryScreen> createState() => _DailySummaryScreenState();
-}
-
-class _DailySummaryScreenState extends State<DailySummaryScreen> {
-  bool _isSyncing = false;
-  bool _verSoloPendientes = false;
-
-  Future<void> _ejecutarSincronizacion(BuildContext contextParam) async {
-    final syncService = Provider.of<SyncService>(contextParam, listen: false);
-    setState(() => _isSyncing = true);
-
-    try {
-      await syncService.sincronizarVentas();
-      if (!mounted || !context.mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('✅ Sincronización Exitosa')));
-    } catch (e) {
-      if (!mounted || !context.mounted) return;
-
-      String mensaje = '❌ No se pudo sincronizar. ';
-      if (e.toString().contains('SocketException') ||
-          e.toString().contains('host lookup')) {
-        mensaje += 'Revisa tu conexión a internet.';
-      } else {
-        mensaje += 'Error: $e';
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
-      );
-    } finally {
-      if (mounted) setState(() => _isSyncing = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final db = Provider.of<AppDatabase>(context);
+    final syncService = Provider.of<SyncService>(context, listen: false);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cierre de Caja Diario'),
         actions: [
-          StreamBuilder<int>(
-            stream: db.watchVentasPendientesCount(),
-            builder: (context, snapshot) {
-              final pendientes = snapshot.data ?? 0;
-
-              if (_isSyncing) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 15),
-                  child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-                );
-              }
-
-              if (pendientes == 0) {
-                return const Padding(
-                  padding: EdgeInsets.only(right: 15),
-                  child: Icon(Icons.cloud_done, color: Colors.green),
-                );
-              }
-
-              return Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: ElevatedButton.icon(
-                  onPressed: () => _ejecutarSincronizacion(context),
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: StreamBuilder<List<Venta>>(
+              stream: db.watchVentasPendientes(),
+              builder: (context, snapshot) {
+                final pendientes = snapshot.data?.length ?? 0;
+                return ElevatedButton.icon(
+                  onPressed: pendientes > 0 ? () => syncService.sincronizacionCompletaSegura() : null,
                   icon: const Icon(Icons.cloud_upload),
                   label: Text('SINCRONIZAR ($pendientes)'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          StreamBuilder<List<VentaConDetalles>>(
-            stream: db.watchVentasHoyConDetalles(),
-            builder: (context, snapshot) {
-              final ventas = snapshot.data ?? [];
-              final total = ventas.fold(0.0, (s, item) => s + item.venta.total);
-              
-              return Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(25),
-                color: Colors.blue.shade50,
-                child: Column(
-                  children: [
-                    const Text('TOTAL VENDIDO HOY', style: TextStyle(fontWeight: FontWeight.w600)),
-                    Text('\$${total.toStringAsFixed(2)}', 
-                         style: const TextStyle(fontSize: 45, fontWeight: FontWeight.bold, color: Colors.blue)),
-                    Text('${ventas.length} ventas realizadas'),
-                  ],
-                ),
-              );
-            },
-          ),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment<bool>(value: false, label: Text('Todas'), icon: Icon(Icons.list)),
-                ButtonSegment<bool>(value: true, label: Text('Solo Pendientes'), icon: Icon(Icons.cloud_off)),
-              ],
-              selected: {_verSoloPendientes},
-              onSelectionChanged: (Set<bool> selection) {
-                setState(() => _verSoloPendientes = selection.first);
+                );
               },
             ),
           ),
+        ],
+      ),
+      body: StreamBuilder<List<VentaConDetalles>>(
+        stream: db.watchVentasDelDiaDetalladas(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
           
-          Expanded(
-            child: StreamBuilder<List<VentaConDetalles>>(
-              stream: db.watchVentasHoyConDetalles(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                
-                final todas = snapshot.data!;
-                final filtradas = _verSoloPendientes 
-                    ? todas.where((v) => v.venta.sincronizado == false).toList()
-                    : todas;
+          final ventas = snapshot.data!;
+          final totalVendido = ventas.fold(0.0, (sum, v) => sum + v.venta.total);
+          final totalCapital = ventas.fold(0.0, (sum, v) => sum + v.capitalTotalVenta);
+          final totalGanancia = totalVendido - totalCapital;
 
-                return ListView.builder(
-                  itemCount: filtradas.length,
+          return Column(
+            children: [
+              _buildHeaderFinanciero(totalVendido, totalCapital, totalGanancia, ventas.length),
+              
+              const Divider(height: 1),
+              
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(top: 10, bottom: 30),
+                  itemCount: ventas.length,
                   itemBuilder: (context, index) {
-                    final item = filtradas[index];
-                    final bool isSincro = item.venta.sincronizado;
+                    final item = ventas[index];
+                    final isSincro = item.venta.sincronizado;
 
                     return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      elevation: 3,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(
-                          color: isSincro ? Colors.transparent : Colors.orange,
-                          width: 1,
-                        ),
+                        borderRadius: BorderRadius.circular(15),
+                        side: BorderSide(color: isSincro ? Colors.grey.shade200 : Colors.orange.shade300, width: 2),
                       ),
                       child: ExpansionTile(
                         leading: Icon(
-                          isSincro ? Icons.cloud_done : Icons.cloud_off, 
-                          color: isSincro ? Colors.green : Colors.orange
+                          isSincro ? Icons.cloud_done : Icons.cloud_off,
+                          color: isSincro ? Colors.blue : Colors.orange,
+                          size: 32,
                         ),
-                        title: Text('Venta #${item.venta.id.substring(0, 5)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(DateFormat('hh:mm a').format(item.venta.fecha)),
+                        title: Text('Venta #${item.venta.id.substring(0, 5).toUpperCase()}', 
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('Ganancia Venta: \$${item.gananciaTotalVenta.toStringAsFixed(2)}'),
                         trailing: Text('\$${item.venta.total.toStringAsFixed(2)}', 
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green)),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green)),
                         children: [
                           Container(
-                            color: Colors.grey.shade50,
+                            padding: const EdgeInsets.all(15),
+                            color: Colors.blueGrey.shade50,
                             child: Column(
-                              children: item.detallesFormateados.map((d) => ListTile(
-                                dense: true,
-                                leading: const Icon(Icons.arrow_right, size: 18),
-                                title: Text(d),
-                              )).toList(),
+                              children: item.desglosePorProducto.map((d) => _buildFilaDetallada(d)).toList(),
                             ),
                           )
                         ],
                       ),
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFilaDetallada(DetalleConCalculo d) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("${d.cantidad}x ${d.nombre}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              Text("\$${(d.precioVentaUnitario * d.cantidad).toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
           ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              _etiquetaFinanciera("Capital: \$${d.capitalTotalFila.toStringAsFixed(2)}", Colors.orange),
+              const SizedBox(width: 15),
+              _etiquetaFinanciera("Ganancia: \$${d.gananciaTotalFila.toStringAsFixed(2)}", Colors.green),
+            ],
+          ),
+          const Divider(),
         ],
       ),
+    );
+  }
+
+  Widget _etiquetaFinanciera(String texto, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(5)),
+      child: Text(texto, style: TextStyle(color: color.withValues(alpha: 0.8), fontSize: 12, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildHeaderFinanciero(double v, double c, double g, int cant) {
+    return Container(
+      padding: const EdgeInsets.all(25),
+      color: Colors.blueGrey.shade900,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildDatoHeader("VENTAS", v, Colors.blueAccent),
+          _buildDatoHeader("CAPITAL", c, Colors.orangeAccent),
+          _buildDatoHeader("GANANCIA", g, Colors.greenAccent),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDatoHeader(String t, double v, Color c) {
+    return Column(
+      children: [
+        Text(t, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+        Text("\$${v.toStringAsFixed(2)}", style: TextStyle(color: c, fontSize: 24, fontWeight: FontWeight.bold)),
+      ],
     );
   }
 }

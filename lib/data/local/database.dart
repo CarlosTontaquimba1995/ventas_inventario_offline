@@ -5,11 +5,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 part 'database.g.dart';
+
 class Productos extends Table {
   TextColumn get id => text()();
   TextColumn get nombre => text()();
-  RealColumn get precio => real()();
-  IntColumn get stockLocal => integer().withDefault(const Constant(0))();
+  RealColumn get precio => real()(); 
+  RealColumn get precioCompra => real().nullable().named('precio_compra')();
+  IntColumn get stockLocal =>
+      integer().named('stock_total').withDefault(const Constant(0))();
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -31,17 +34,59 @@ class VentaDetalles extends Table {
   RealColumn get precioUnitario => real()();
 }
 
+class DetalleConCalculo {
+  final String nombre;
+  final int cantidad;
+  final double precioVentaUnitario;
+  final double capitalTotalFila;
+  final double gananciaTotalFila;
+
+  DetalleConCalculo({
+    required this.nombre,
+    required this.cantidad,
+    required this.precioVentaUnitario,
+    required this.capitalTotalFila,
+    required this.gananciaTotalFila,
+  });
+}
+
 class VentaConDetalles {
   final Venta venta;
-  final List<VentaDetalle> detalles;
+  final List<VentaDetalle> detallesRaw;
+  final List<Producto> productosRelacionados;
 
-  VentaConDetalles(this.venta, this.detalles);
-  List<String> get detallesFormateados {
-    if (detalles.isEmpty) return ["Sin productos"];
-    return detalles
-        .map((d) => "${d.cantidad}x Producto: ${d.productoId}")
-        .toList();
+  VentaConDetalles(this.venta, this.detallesRaw, this.productosRelacionados);
+
+  List<DetalleConCalculo> get desglosePorProducto {
+    return detallesRaw.map((d) {
+      final p = productosRelacionados.firstWhere(
+        (prod) => prod.id == d.productoId,
+        orElse: () => const Producto(
+          id: '',
+          nombre: 'Desconocido',
+          precio: 0,
+          stockLocal: 0,
+          precioCompra: 0,
+        ),
+      );
+
+      double costoUnitario = p.precioCompra ?? 0.0;
+      double ventaTotalFila = d.precioUnitario * d.cantidad;
+      double capitalTotalFila = costoUnitario * d.cantidad;
+
+      return DetalleConCalculo(
+        nombre: p.nombre,
+        cantidad: d.cantidad,
+        precioVentaUnitario: d.precioUnitario,
+        capitalTotalFila: capitalTotalFila,
+        gananciaTotalFila: ventaTotalFila - capitalTotalFila,
+      );
+    }).toList();
   }
+
+  double get capitalTotalVenta =>
+      desglosePorProducto.fold(0, (sum, item) => sum + item.capitalTotalFila);
+  double get gananciaTotalVenta => venta.total - capitalTotalVenta;
 }
 
 @DriftDatabase(tables: [Productos, Ventas, VentaDetalles])
@@ -59,49 +104,42 @@ class AppDatabase extends _$AppDatabase {
         ventaDetalles.productoId.equalsExp(productos.id),
       ),
     ]);
-
     query.addColumns([sumaCantidad]);
     query.groupBy([productos.id]);
     query.orderBy([
       OrderingTerm(expression: sumaCantidad, mode: OrderingMode.desc),
     ]);
-
     return query.watch().map(
       (rows) => rows.map((row) => row.readTable(productos)).toList(),
     );
   }
 
-  Stream<int> watchVentasPendientesCount() {
-    return (select(ventas)..where((t) => t.sincronizado.equals(false)))
-        .watch()
-        .map((list) => list.length);
-  }
-
-  Stream<List<VentaConDetalles>> watchVentasHoyConDetalles() {
+  Stream<List<VentaConDetalles>> watchVentasDelDiaDetalladas() {
     final ahora = DateTime.now();
     final inicioDia = DateTime(ahora.year, ahora.month, ahora.day);
-    final streamVentas =
-        (select(ventas)
-              ..where((t) => t.fecha.isBiggerOrEqualValue(inicioDia))
-              ..orderBy([
-                (t) =>
-                    OrderingTerm(expression: t.fecha, mode: OrderingMode.desc),
-              ]))
-            .watch();
 
-    return streamVentas.asyncMap((listaVentas) async {
-      if (listaVentas.isEmpty) return [];
-      final List<String> idsVentas = listaVentas.map((v) => v.id).toList();
-      final todosLosDetalles = await (select(
-        ventaDetalles,
-      )..where((t) => t.ventaId.isIn(idsVentas))).get();
-      return listaVentas.map((venta) {
-        final detallesDeEstaVenta = todosLosDetalles
-            .where((d) => d.ventaId == venta.id)
-            .toList();
-        return VentaConDetalles(venta, detallesDeEstaVenta);
-      }).toList();
+    return (select(ventas)
+          ..where((t) => t.fecha.isBiggerOrEqualValue(inicioDia))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.fecha, mode: OrderingMode.desc),
+          ]))
+        .watch()
+        .asyncMap((listaVentas) async {
+          final todosLosProductos = await select(productos).get();
+          final listaCompleta = <VentaConDetalles>[];
+
+          for (var v in listaVentas) {
+            final detalles = await (select(
+              ventaDetalles,
+            )..where((t) => t.ventaId.equals(v.id))).get();
+            listaCompleta.add(VentaConDetalles(v, detalles, todosLosProductos));
+          }
+          return listaCompleta;
     });
+  }
+
+  Stream<List<Venta>> watchVentasPendientes() {
+    return (select(ventas)..where((t) => t.sincronizado.equals(false))).watch();
   }
 
   Future<void> registrarVentaCompleta(VentasCompanion venta, List<VentaDetallesCompanion> detalles) async {

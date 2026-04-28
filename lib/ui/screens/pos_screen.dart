@@ -151,7 +151,12 @@ class _PosScreenState extends State<PosScreen> {
                       ? db.watchProductosOrdenadosPorVentas() 
                       : (db.select(db.productos)..where((p) => p.nombre.lower().contains(_searchQuery.toLowerCase()))).watch(),
                     builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(child: Text("Error en la base de datos: ${snapshot.error}"));
+                      }
+  
                       if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+  
                       final productos = snapshot.data!;
                       
                       return GridView.builder(

@@ -11,14 +11,14 @@ class SyncService {
   Future<void> descargarCatalogoDesdeNube() async {
     try {
       final response = await supabase.from('productos').select();
-      final List<ProductosCompanion> productosNube = (response as List).map((
-        p,
-      ) {
-        return ProductosCompanion.insert(
-          id: p['id'],
-          nombre: p['nombre'],
-          precio: (p['precio'] as num).toDouble(),
-          stockLocal: d.Value((p['stock_total'] as num).toInt()), 
+      
+      final List<ProductosCompanion> productosNube = (response as List).map((p) {
+        return ProductosCompanion(
+          id: d.Value(p['id']),
+          nombre: d.Value(p['nombre']),
+          precio: d.Value((p['precio'] as num).toDouble()),
+          precioCompra: d.Value((p['precio_compra'] as num?)?.toDouble() ?? 0.0),
+          stockLocal: d.Value((p['stock_total'] as num?)?.toInt() ?? 0),
         );
       }).toList();
 
@@ -29,7 +29,9 @@ class SyncService {
           mode: d.InsertMode.insertOrReplace,
         );
       });
+      print("Sincronización exitosa: ${productosNube.length} productos guardados.");
     } catch (e) {
+      print("Error en descargarCatalogoDesdeNube: $e");
       rethrow;
     }
   }
