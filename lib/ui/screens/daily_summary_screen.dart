@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:ventas_inventario_offline/data/services/services/sync_service.dart';
-import 'package:ventas_inventario_offline/models/venta_con_detalles.dart';
 import '../../data/local/database.dart';
 
 class DailySummaryScreen extends StatefulWidget {

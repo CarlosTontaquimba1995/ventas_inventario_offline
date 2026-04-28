@@ -48,26 +48,8 @@ class $ProductosTable extends Productos
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
-  static const VerificationMeta _actualizadoAtMeta = const VerificationMeta(
-    'actualizadoAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> actualizadoAt =
-      GeneratedColumn<DateTime>(
-        'actualizado_at',
-        aliasedName,
-        true,
-        type: DriftSqlType.dateTime,
-        requiredDuringInsert: false,
-      );
-  @override
-  List<GeneratedColumn> get $columns => [
-    id,
-    nombre,
-    precio,
-    stockLocal,
-    actualizadoAt,
-  ];
+  List<GeneratedColumn> get $columns => [id, nombre, precio, stockLocal];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -107,15 +89,6 @@ class $ProductosTable extends Productos
         stockLocal.isAcceptableOrUnknown(data['stock_local']!, _stockLocalMeta),
       );
     }
-    if (data.containsKey('actualizado_at')) {
-      context.handle(
-        _actualizadoAtMeta,
-        actualizadoAt.isAcceptableOrUnknown(
-          data['actualizado_at']!,
-          _actualizadoAtMeta,
-        ),
-      );
-    }
     return context;
   }
 
@@ -141,10 +114,6 @@ class $ProductosTable extends Productos
         DriftSqlType.int,
         data['${effectivePrefix}stock_local'],
       )!,
-      actualizadoAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}actualizado_at'],
-      ),
     );
   }
 
@@ -159,13 +128,11 @@ class Producto extends DataClass implements Insertable<Producto> {
   final String nombre;
   final double precio;
   final int stockLocal;
-  final DateTime? actualizadoAt;
   const Producto({
     required this.id,
     required this.nombre,
     required this.precio,
     required this.stockLocal,
-    this.actualizadoAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -174,9 +141,6 @@ class Producto extends DataClass implements Insertable<Producto> {
     map['nombre'] = Variable<String>(nombre);
     map['precio'] = Variable<double>(precio);
     map['stock_local'] = Variable<int>(stockLocal);
-    if (!nullToAbsent || actualizadoAt != null) {
-      map['actualizado_at'] = Variable<DateTime>(actualizadoAt);
-    }
     return map;
   }
 
@@ -186,9 +150,6 @@ class Producto extends DataClass implements Insertable<Producto> {
       nombre: Value(nombre),
       precio: Value(precio),
       stockLocal: Value(stockLocal),
-      actualizadoAt: actualizadoAt == null && nullToAbsent
-          ? const Value.absent()
-          : Value(actualizadoAt),
     );
   }
 
@@ -202,7 +163,6 @@ class Producto extends DataClass implements Insertable<Producto> {
       nombre: serializer.fromJson<String>(json['nombre']),
       precio: serializer.fromJson<double>(json['precio']),
       stockLocal: serializer.fromJson<int>(json['stockLocal']),
-      actualizadoAt: serializer.fromJson<DateTime?>(json['actualizadoAt']),
     );
   }
   @override
@@ -213,7 +173,6 @@ class Producto extends DataClass implements Insertable<Producto> {
       'nombre': serializer.toJson<String>(nombre),
       'precio': serializer.toJson<double>(precio),
       'stockLocal': serializer.toJson<int>(stockLocal),
-      'actualizadoAt': serializer.toJson<DateTime?>(actualizadoAt),
     };
   }
 
@@ -222,15 +181,11 @@ class Producto extends DataClass implements Insertable<Producto> {
     String? nombre,
     double? precio,
     int? stockLocal,
-    Value<DateTime?> actualizadoAt = const Value.absent(),
   }) => Producto(
     id: id ?? this.id,
     nombre: nombre ?? this.nombre,
     precio: precio ?? this.precio,
     stockLocal: stockLocal ?? this.stockLocal,
-    actualizadoAt: actualizadoAt.present
-        ? actualizadoAt.value
-        : this.actualizadoAt,
   );
   Producto copyWithCompanion(ProductosCompanion data) {
     return Producto(
@@ -240,9 +195,6 @@ class Producto extends DataClass implements Insertable<Producto> {
       stockLocal: data.stockLocal.present
           ? data.stockLocal.value
           : this.stockLocal,
-      actualizadoAt: data.actualizadoAt.present
-          ? data.actualizadoAt.value
-          : this.actualizadoAt,
     );
   }
 
@@ -252,15 +204,13 @@ class Producto extends DataClass implements Insertable<Producto> {
           ..write('id: $id, ')
           ..write('nombre: $nombre, ')
           ..write('precio: $precio, ')
-          ..write('stockLocal: $stockLocal, ')
-          ..write('actualizadoAt: $actualizadoAt')
+          ..write('stockLocal: $stockLocal')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, nombre, precio, stockLocal, actualizadoAt);
+  int get hashCode => Object.hash(id, nombre, precio, stockLocal);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -268,8 +218,7 @@ class Producto extends DataClass implements Insertable<Producto> {
           other.id == this.id &&
           other.nombre == this.nombre &&
           other.precio == this.precio &&
-          other.stockLocal == this.stockLocal &&
-          other.actualizadoAt == this.actualizadoAt);
+          other.stockLocal == this.stockLocal);
 }
 
 class ProductosCompanion extends UpdateCompanion<Producto> {
@@ -277,14 +226,12 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
   final Value<String> nombre;
   final Value<double> precio;
   final Value<int> stockLocal;
-  final Value<DateTime?> actualizadoAt;
   final Value<int> rowid;
   const ProductosCompanion({
     this.id = const Value.absent(),
     this.nombre = const Value.absent(),
     this.precio = const Value.absent(),
     this.stockLocal = const Value.absent(),
-    this.actualizadoAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ProductosCompanion.insert({
@@ -292,7 +239,6 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     required String nombre,
     required double precio,
     this.stockLocal = const Value.absent(),
-    this.actualizadoAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        nombre = Value(nombre),
@@ -302,7 +248,6 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     Expression<String>? nombre,
     Expression<double>? precio,
     Expression<int>? stockLocal,
-    Expression<DateTime>? actualizadoAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -310,7 +255,6 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
       if (nombre != null) 'nombre': nombre,
       if (precio != null) 'precio': precio,
       if (stockLocal != null) 'stock_local': stockLocal,
-      if (actualizadoAt != null) 'actualizado_at': actualizadoAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -320,7 +264,6 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     Value<String>? nombre,
     Value<double>? precio,
     Value<int>? stockLocal,
-    Value<DateTime?>? actualizadoAt,
     Value<int>? rowid,
   }) {
     return ProductosCompanion(
@@ -328,7 +271,6 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
       nombre: nombre ?? this.nombre,
       precio: precio ?? this.precio,
       stockLocal: stockLocal ?? this.stockLocal,
-      actualizadoAt: actualizadoAt ?? this.actualizadoAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -348,9 +290,6 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     if (stockLocal.present) {
       map['stock_local'] = Variable<int>(stockLocal.value);
     }
-    if (actualizadoAt.present) {
-      map['actualizado_at'] = Variable<DateTime>(actualizadoAt.value);
-    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -364,7 +303,6 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
           ..write('nombre: $nombre, ')
           ..write('precio: $precio, ')
           ..write('stockLocal: $stockLocal, ')
-          ..write('actualizadoAt: $actualizadoAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -385,6 +323,15 @@ class $VentasTable extends Ventas with TableInfo<$VentasTable, Venta> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _totalMeta = const VerificationMeta('total');
+  @override
+  late final GeneratedColumn<double> total = GeneratedColumn<double>(
+    'total',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _fechaMeta = const VerificationMeta('fecha');
   @override
   late final GeneratedColumn<DateTime> fecha = GeneratedColumn<DateTime>(
@@ -394,15 +341,6 @@ class $VentasTable extends Ventas with TableInfo<$VentasTable, Venta> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
     defaultValue: currentDateAndTime,
-  );
-  static const VerificationMeta _totalMeta = const VerificationMeta('total');
-  @override
-  late final GeneratedColumn<double> total = GeneratedColumn<double>(
-    'total',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: true,
   );
   static const VerificationMeta _sincronizadoMeta = const VerificationMeta(
     'sincronizado',
@@ -420,7 +358,7 @@ class $VentasTable extends Ventas with TableInfo<$VentasTable, Venta> {
     defaultValue: const Constant(false),
   );
   @override
-  List<GeneratedColumn> get $columns => [id, fecha, total, sincronizado];
+  List<GeneratedColumn> get $columns => [id, total, fecha, sincronizado];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -438,12 +376,6 @@ class $VentasTable extends Ventas with TableInfo<$VentasTable, Venta> {
     } else if (isInserting) {
       context.missing(_idMeta);
     }
-    if (data.containsKey('fecha')) {
-      context.handle(
-        _fechaMeta,
-        fecha.isAcceptableOrUnknown(data['fecha']!, _fechaMeta),
-      );
-    }
     if (data.containsKey('total')) {
       context.handle(
         _totalMeta,
@@ -451,6 +383,12 @@ class $VentasTable extends Ventas with TableInfo<$VentasTable, Venta> {
       );
     } else if (isInserting) {
       context.missing(_totalMeta);
+    }
+    if (data.containsKey('fecha')) {
+      context.handle(
+        _fechaMeta,
+        fecha.isAcceptableOrUnknown(data['fecha']!, _fechaMeta),
+      );
     }
     if (data.containsKey('sincronizado')) {
       context.handle(
@@ -474,13 +412,13 @@ class $VentasTable extends Ventas with TableInfo<$VentasTable, Venta> {
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
-      fecha: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}fecha'],
-      )!,
       total: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}total'],
+      )!,
+      fecha: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}fecha'],
       )!,
       sincronizado: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
@@ -497,21 +435,21 @@ class $VentasTable extends Ventas with TableInfo<$VentasTable, Venta> {
 
 class Venta extends DataClass implements Insertable<Venta> {
   final String id;
-  final DateTime fecha;
   final double total;
+  final DateTime fecha;
   final bool sincronizado;
   const Venta({
     required this.id,
-    required this.fecha,
     required this.total,
+    required this.fecha,
     required this.sincronizado,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
-    map['fecha'] = Variable<DateTime>(fecha);
     map['total'] = Variable<double>(total);
+    map['fecha'] = Variable<DateTime>(fecha);
     map['sincronizado'] = Variable<bool>(sincronizado);
     return map;
   }
@@ -519,8 +457,8 @@ class Venta extends DataClass implements Insertable<Venta> {
   VentasCompanion toCompanion(bool nullToAbsent) {
     return VentasCompanion(
       id: Value(id),
-      fecha: Value(fecha),
       total: Value(total),
+      fecha: Value(fecha),
       sincronizado: Value(sincronizado),
     );
   }
@@ -532,8 +470,8 @@ class Venta extends DataClass implements Insertable<Venta> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Venta(
       id: serializer.fromJson<String>(json['id']),
-      fecha: serializer.fromJson<DateTime>(json['fecha']),
       total: serializer.fromJson<double>(json['total']),
+      fecha: serializer.fromJson<DateTime>(json['fecha']),
       sincronizado: serializer.fromJson<bool>(json['sincronizado']),
     );
   }
@@ -542,28 +480,28 @@ class Venta extends DataClass implements Insertable<Venta> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
-      'fecha': serializer.toJson<DateTime>(fecha),
       'total': serializer.toJson<double>(total),
+      'fecha': serializer.toJson<DateTime>(fecha),
       'sincronizado': serializer.toJson<bool>(sincronizado),
     };
   }
 
   Venta copyWith({
     String? id,
-    DateTime? fecha,
     double? total,
+    DateTime? fecha,
     bool? sincronizado,
   }) => Venta(
     id: id ?? this.id,
-    fecha: fecha ?? this.fecha,
     total: total ?? this.total,
+    fecha: fecha ?? this.fecha,
     sincronizado: sincronizado ?? this.sincronizado,
   );
   Venta copyWithCompanion(VentasCompanion data) {
     return Venta(
       id: data.id.present ? data.id.value : this.id,
-      fecha: data.fecha.present ? data.fecha.value : this.fecha,
       total: data.total.present ? data.total.value : this.total,
+      fecha: data.fecha.present ? data.fecha.value : this.fecha,
       sincronizado: data.sincronizado.present
           ? data.sincronizado.value
           : this.sincronizado,
@@ -574,57 +512,57 @@ class Venta extends DataClass implements Insertable<Venta> {
   String toString() {
     return (StringBuffer('Venta(')
           ..write('id: $id, ')
-          ..write('fecha: $fecha, ')
           ..write('total: $total, ')
+          ..write('fecha: $fecha, ')
           ..write('sincronizado: $sincronizado')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, fecha, total, sincronizado);
+  int get hashCode => Object.hash(id, total, fecha, sincronizado);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Venta &&
           other.id == this.id &&
-          other.fecha == this.fecha &&
           other.total == this.total &&
+          other.fecha == this.fecha &&
           other.sincronizado == this.sincronizado);
 }
 
 class VentasCompanion extends UpdateCompanion<Venta> {
   final Value<String> id;
-  final Value<DateTime> fecha;
   final Value<double> total;
+  final Value<DateTime> fecha;
   final Value<bool> sincronizado;
   final Value<int> rowid;
   const VentasCompanion({
     this.id = const Value.absent(),
-    this.fecha = const Value.absent(),
     this.total = const Value.absent(),
+    this.fecha = const Value.absent(),
     this.sincronizado = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   VentasCompanion.insert({
     required String id,
-    this.fecha = const Value.absent(),
     required double total,
+    this.fecha = const Value.absent(),
     this.sincronizado = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        total = Value(total);
   static Insertable<Venta> custom({
     Expression<String>? id,
-    Expression<DateTime>? fecha,
     Expression<double>? total,
+    Expression<DateTime>? fecha,
     Expression<bool>? sincronizado,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
-      if (fecha != null) 'fecha': fecha,
       if (total != null) 'total': total,
+      if (fecha != null) 'fecha': fecha,
       if (sincronizado != null) 'sincronizado': sincronizado,
       if (rowid != null) 'rowid': rowid,
     });
@@ -632,15 +570,15 @@ class VentasCompanion extends UpdateCompanion<Venta> {
 
   VentasCompanion copyWith({
     Value<String>? id,
-    Value<DateTime>? fecha,
     Value<double>? total,
+    Value<DateTime>? fecha,
     Value<bool>? sincronizado,
     Value<int>? rowid,
   }) {
     return VentasCompanion(
       id: id ?? this.id,
-      fecha: fecha ?? this.fecha,
       total: total ?? this.total,
+      fecha: fecha ?? this.fecha,
       sincronizado: sincronizado ?? this.sincronizado,
       rowid: rowid ?? this.rowid,
     );
@@ -652,11 +590,11 @@ class VentasCompanion extends UpdateCompanion<Venta> {
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
-    if (fecha.present) {
-      map['fecha'] = Variable<DateTime>(fecha.value);
-    }
     if (total.present) {
       map['total'] = Variable<double>(total.value);
+    }
+    if (fecha.present) {
+      map['fecha'] = Variable<DateTime>(fecha.value);
     }
     if (sincronizado.present) {
       map['sincronizado'] = Variable<bool>(sincronizado.value);
@@ -671,8 +609,8 @@ class VentasCompanion extends UpdateCompanion<Venta> {
   String toString() {
     return (StringBuffer('VentasCompanion(')
           ..write('id: $id, ')
-          ..write('fecha: $fecha, ')
           ..write('total: $total, ')
+          ..write('fecha: $fecha, ')
           ..write('sincronizado: $sincronizado, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -1069,7 +1007,6 @@ typedef $$ProductosTableCreateCompanionBuilder =
       required String nombre,
       required double precio,
       Value<int> stockLocal,
-      Value<DateTime?> actualizadoAt,
       Value<int> rowid,
     });
 typedef $$ProductosTableUpdateCompanionBuilder =
@@ -1078,7 +1015,6 @@ typedef $$ProductosTableUpdateCompanionBuilder =
       Value<String> nombre,
       Value<double> precio,
       Value<int> stockLocal,
-      Value<DateTime?> actualizadoAt,
       Value<int> rowid,
     });
 
@@ -1137,11 +1073,6 @@ class $$ProductosTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get actualizadoAt => $composableBuilder(
-    column: $table.actualizadoAt,
-    builder: (column) => ColumnFilters(column),
-  );
-
   Expression<bool> ventaDetallesRefs(
     Expression<bool> Function($$VentaDetallesTableFilterComposer f) f,
   ) {
@@ -1196,11 +1127,6 @@ class $$ProductosTableOrderingComposer
     column: $table.stockLocal,
     builder: (column) => ColumnOrderings(column),
   );
-
-  ColumnOrderings<DateTime> get actualizadoAt => $composableBuilder(
-    column: $table.actualizadoAt,
-    builder: (column) => ColumnOrderings(column),
-  );
 }
 
 class $$ProductosTableAnnotationComposer
@@ -1223,11 +1149,6 @@ class $$ProductosTableAnnotationComposer
 
   GeneratedColumn<int> get stockLocal => $composableBuilder(
     column: $table.stockLocal,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<DateTime> get actualizadoAt => $composableBuilder(
-    column: $table.actualizadoAt,
     builder: (column) => column,
   );
 
@@ -1289,14 +1210,12 @@ class $$ProductosTableTableManager
                 Value<String> nombre = const Value.absent(),
                 Value<double> precio = const Value.absent(),
                 Value<int> stockLocal = const Value.absent(),
-                Value<DateTime?> actualizadoAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProductosCompanion(
                 id: id,
                 nombre: nombre,
                 precio: precio,
                 stockLocal: stockLocal,
-                actualizadoAt: actualizadoAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1305,14 +1224,12 @@ class $$ProductosTableTableManager
                 required String nombre,
                 required double precio,
                 Value<int> stockLocal = const Value.absent(),
-                Value<DateTime?> actualizadoAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProductosCompanion.insert(
                 id: id,
                 nombre: nombre,
                 precio: precio,
                 stockLocal: stockLocal,
-                actualizadoAt: actualizadoAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -1376,16 +1293,16 @@ typedef $$ProductosTableProcessedTableManager =
 typedef $$VentasTableCreateCompanionBuilder =
     VentasCompanion Function({
       required String id,
-      Value<DateTime> fecha,
       required double total,
+      Value<DateTime> fecha,
       Value<bool> sincronizado,
       Value<int> rowid,
     });
 typedef $$VentasTableUpdateCompanionBuilder =
     VentasCompanion Function({
       Value<String> id,
-      Value<DateTime> fecha,
       Value<double> total,
+      Value<DateTime> fecha,
       Value<bool> sincronizado,
       Value<int> rowid,
     });
@@ -1427,13 +1344,13 @@ class $$VentasTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get fecha => $composableBuilder(
-    column: $table.fecha,
+  ColumnFilters<double> get total => $composableBuilder(
+    column: $table.total,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get total => $composableBuilder(
-    column: $table.total,
+  ColumnFilters<DateTime> get fecha => $composableBuilder(
+    column: $table.fecha,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1482,13 +1399,13 @@ class $$VentasTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get fecha => $composableBuilder(
-    column: $table.fecha,
+  ColumnOrderings<double> get total => $composableBuilder(
+    column: $table.total,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get total => $composableBuilder(
-    column: $table.total,
+  ColumnOrderings<DateTime> get fecha => $composableBuilder(
+    column: $table.fecha,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -1510,11 +1427,11 @@ class $$VentasTableAnnotationComposer
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get fecha =>
-      $composableBuilder(column: $table.fecha, builder: (column) => column);
-
   GeneratedColumn<double> get total =>
       $composableBuilder(column: $table.total, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get fecha =>
+      $composableBuilder(column: $table.fecha, builder: (column) => column);
 
   GeneratedColumn<bool> get sincronizado => $composableBuilder(
     column: $table.sincronizado,
@@ -1576,28 +1493,28 @@ class $$VentasTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
-                Value<DateTime> fecha = const Value.absent(),
                 Value<double> total = const Value.absent(),
+                Value<DateTime> fecha = const Value.absent(),
                 Value<bool> sincronizado = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => VentasCompanion(
                 id: id,
-                fecha: fecha,
                 total: total,
+                fecha: fecha,
                 sincronizado: sincronizado,
                 rowid: rowid,
               ),
           createCompanionCallback:
               ({
                 required String id,
-                Value<DateTime> fecha = const Value.absent(),
                 required double total,
+                Value<DateTime> fecha = const Value.absent(),
                 Value<bool> sincronizado = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => VentasCompanion.insert(
                 id: id,
-                fecha: fecha,
                 total: total,
+                fecha: fecha,
                 sincronizado: sincronizado,
                 rowid: rowid,
               ),
