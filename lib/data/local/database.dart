@@ -12,6 +12,8 @@ class Productos extends Table {
   RealColumn get precio => real()(); 
   RealColumn get precioCompra => real().nullable().named('precio_compra')(); 
   IntColumn get stockLocal => integer().named('stock_total').withDefault(const Constant(0))();
+  TextColumn get imagenUrl => text().nullable().named('imagen_url')(); 
+
   @override
   Set<Column> get primaryKey => {id};
 }

@@ -59,6 +59,17 @@ class $ProductosTable extends Productos
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _imagenUrlMeta = const VerificationMeta(
+    'imagenUrl',
+  );
+  @override
+  late final GeneratedColumn<String> imagenUrl = GeneratedColumn<String>(
+    'imagen_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -66,6 +77,7 @@ class $ProductosTable extends Productos
     precio,
     precioCompra,
     stockLocal,
+    imagenUrl,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -115,6 +127,12 @@ class $ProductosTable extends Productos
         stockLocal.isAcceptableOrUnknown(data['stock_total']!, _stockLocalMeta),
       );
     }
+    if (data.containsKey('imagen_url')) {
+      context.handle(
+        _imagenUrlMeta,
+        imagenUrl.isAcceptableOrUnknown(data['imagen_url']!, _imagenUrlMeta),
+      );
+    }
     return context;
   }
 
@@ -144,6 +162,10 @@ class $ProductosTable extends Productos
         DriftSqlType.int,
         data['${effectivePrefix}stock_total'],
       )!,
+      imagenUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}imagen_url'],
+      ),
     );
   }
 
@@ -159,12 +181,14 @@ class Producto extends DataClass implements Insertable<Producto> {
   final double precio;
   final double? precioCompra;
   final int stockLocal;
+  final String? imagenUrl;
   const Producto({
     required this.id,
     required this.nombre,
     required this.precio,
     this.precioCompra,
     required this.stockLocal,
+    this.imagenUrl,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -176,6 +200,9 @@ class Producto extends DataClass implements Insertable<Producto> {
       map['precio_compra'] = Variable<double>(precioCompra);
     }
     map['stock_total'] = Variable<int>(stockLocal);
+    if (!nullToAbsent || imagenUrl != null) {
+      map['imagen_url'] = Variable<String>(imagenUrl);
+    }
     return map;
   }
 
@@ -188,6 +215,9 @@ class Producto extends DataClass implements Insertable<Producto> {
           ? const Value.absent()
           : Value(precioCompra),
       stockLocal: Value(stockLocal),
+      imagenUrl: imagenUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imagenUrl),
     );
   }
 
@@ -202,6 +232,7 @@ class Producto extends DataClass implements Insertable<Producto> {
       precio: serializer.fromJson<double>(json['precio']),
       precioCompra: serializer.fromJson<double?>(json['precioCompra']),
       stockLocal: serializer.fromJson<int>(json['stockLocal']),
+      imagenUrl: serializer.fromJson<String?>(json['imagenUrl']),
     );
   }
   @override
@@ -213,6 +244,7 @@ class Producto extends DataClass implements Insertable<Producto> {
       'precio': serializer.toJson<double>(precio),
       'precioCompra': serializer.toJson<double?>(precioCompra),
       'stockLocal': serializer.toJson<int>(stockLocal),
+      'imagenUrl': serializer.toJson<String?>(imagenUrl),
     };
   }
 
@@ -222,12 +254,14 @@ class Producto extends DataClass implements Insertable<Producto> {
     double? precio,
     Value<double?> precioCompra = const Value.absent(),
     int? stockLocal,
+    Value<String?> imagenUrl = const Value.absent(),
   }) => Producto(
     id: id ?? this.id,
     nombre: nombre ?? this.nombre,
     precio: precio ?? this.precio,
     precioCompra: precioCompra.present ? precioCompra.value : this.precioCompra,
     stockLocal: stockLocal ?? this.stockLocal,
+    imagenUrl: imagenUrl.present ? imagenUrl.value : this.imagenUrl,
   );
   Producto copyWithCompanion(ProductosCompanion data) {
     return Producto(
@@ -240,6 +274,7 @@ class Producto extends DataClass implements Insertable<Producto> {
       stockLocal: data.stockLocal.present
           ? data.stockLocal.value
           : this.stockLocal,
+      imagenUrl: data.imagenUrl.present ? data.imagenUrl.value : this.imagenUrl,
     );
   }
 
@@ -250,13 +285,15 @@ class Producto extends DataClass implements Insertable<Producto> {
           ..write('nombre: $nombre, ')
           ..write('precio: $precio, ')
           ..write('precioCompra: $precioCompra, ')
-          ..write('stockLocal: $stockLocal')
+          ..write('stockLocal: $stockLocal, ')
+          ..write('imagenUrl: $imagenUrl')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, nombre, precio, precioCompra, stockLocal);
+  int get hashCode =>
+      Object.hash(id, nombre, precio, precioCompra, stockLocal, imagenUrl);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -265,7 +302,8 @@ class Producto extends DataClass implements Insertable<Producto> {
           other.nombre == this.nombre &&
           other.precio == this.precio &&
           other.precioCompra == this.precioCompra &&
-          other.stockLocal == this.stockLocal);
+          other.stockLocal == this.stockLocal &&
+          other.imagenUrl == this.imagenUrl);
 }
 
 class ProductosCompanion extends UpdateCompanion<Producto> {
@@ -274,6 +312,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
   final Value<double> precio;
   final Value<double?> precioCompra;
   final Value<int> stockLocal;
+  final Value<String?> imagenUrl;
   final Value<int> rowid;
   const ProductosCompanion({
     this.id = const Value.absent(),
@@ -281,6 +320,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     this.precio = const Value.absent(),
     this.precioCompra = const Value.absent(),
     this.stockLocal = const Value.absent(),
+    this.imagenUrl = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   ProductosCompanion.insert({
@@ -289,6 +329,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     required double precio,
     this.precioCompra = const Value.absent(),
     this.stockLocal = const Value.absent(),
+    this.imagenUrl = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        nombre = Value(nombre),
@@ -299,6 +340,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     Expression<double>? precio,
     Expression<double>? precioCompra,
     Expression<int>? stockLocal,
+    Expression<String>? imagenUrl,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -307,6 +349,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
       if (precio != null) 'precio': precio,
       if (precioCompra != null) 'precio_compra': precioCompra,
       if (stockLocal != null) 'stock_total': stockLocal,
+      if (imagenUrl != null) 'imagen_url': imagenUrl,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -317,6 +360,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     Value<double>? precio,
     Value<double?>? precioCompra,
     Value<int>? stockLocal,
+    Value<String?>? imagenUrl,
     Value<int>? rowid,
   }) {
     return ProductosCompanion(
@@ -325,6 +369,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
       precio: precio ?? this.precio,
       precioCompra: precioCompra ?? this.precioCompra,
       stockLocal: stockLocal ?? this.stockLocal,
+      imagenUrl: imagenUrl ?? this.imagenUrl,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -347,6 +392,9 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
     if (stockLocal.present) {
       map['stock_total'] = Variable<int>(stockLocal.value);
     }
+    if (imagenUrl.present) {
+      map['imagen_url'] = Variable<String>(imagenUrl.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -361,6 +409,7 @@ class ProductosCompanion extends UpdateCompanion<Producto> {
           ..write('precio: $precio, ')
           ..write('precioCompra: $precioCompra, ')
           ..write('stockLocal: $stockLocal, ')
+          ..write('imagenUrl: $imagenUrl, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1066,6 +1115,7 @@ typedef $$ProductosTableCreateCompanionBuilder =
       required double precio,
       Value<double?> precioCompra,
       Value<int> stockLocal,
+      Value<String?> imagenUrl,
       Value<int> rowid,
     });
 typedef $$ProductosTableUpdateCompanionBuilder =
@@ -1075,6 +1125,7 @@ typedef $$ProductosTableUpdateCompanionBuilder =
       Value<double> precio,
       Value<double?> precioCompra,
       Value<int> stockLocal,
+      Value<String?> imagenUrl,
       Value<int> rowid,
     });
 
@@ -1138,6 +1189,11 @@ class $$ProductosTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get imagenUrl => $composableBuilder(
+    column: $table.imagenUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
   Expression<bool> ventaDetallesRefs(
     Expression<bool> Function($$VentaDetallesTableFilterComposer f) f,
   ) {
@@ -1197,6 +1253,11 @@ class $$ProductosTableOrderingComposer
     column: $table.stockLocal,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get imagenUrl => $composableBuilder(
+    column: $table.imagenUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$ProductosTableAnnotationComposer
@@ -1226,6 +1287,9 @@ class $$ProductosTableAnnotationComposer
     column: $table.stockLocal,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get imagenUrl =>
+      $composableBuilder(column: $table.imagenUrl, builder: (column) => column);
 
   Expression<T> ventaDetallesRefs<T extends Object>(
     Expression<T> Function($$VentaDetallesTableAnnotationComposer a) f,
@@ -1286,6 +1350,7 @@ class $$ProductosTableTableManager
                 Value<double> precio = const Value.absent(),
                 Value<double?> precioCompra = const Value.absent(),
                 Value<int> stockLocal = const Value.absent(),
+                Value<String?> imagenUrl = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProductosCompanion(
                 id: id,
@@ -1293,6 +1358,7 @@ class $$ProductosTableTableManager
                 precio: precio,
                 precioCompra: precioCompra,
                 stockLocal: stockLocal,
+                imagenUrl: imagenUrl,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1302,6 +1368,7 @@ class $$ProductosTableTableManager
                 required double precio,
                 Value<double?> precioCompra = const Value.absent(),
                 Value<int> stockLocal = const Value.absent(),
+                Value<String?> imagenUrl = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ProductosCompanion.insert(
                 id: id,
@@ -1309,6 +1376,7 @@ class $$ProductosTableTableManager
                 precio: precio,
                 precioCompra: precioCompra,
                 stockLocal: stockLocal,
+                imagenUrl: imagenUrl,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

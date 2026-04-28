@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:drift/drift.dart' as d hide Column;
 import 'package:uuid/uuid.dart'; 
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../data/local/database.dart';
 import '../../data/services/services/sync_service.dart';
 import 'daily_summary_screen.dart';
@@ -31,7 +32,7 @@ class _PosScreenState extends State<PosScreen> {
     if (_cart.isNotEmpty) {
       ScaffoldMessenger.of(contextParam).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ Termina o limpia el carrito antes de sincronizar.'),
+          content: Text('Termina o limpia el carrito antes de sincronizar.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -48,7 +49,7 @@ class _PosScreenState extends State<PosScreen> {
           children: [
             CircularProgressIndicator(),
             SizedBox(width: 20),
-            Text("Sincronizando con la nube..."),
+            Text("Actualizando inventario..."),
           ],
         ),
       ),
@@ -56,33 +57,25 @@ class _PosScreenState extends State<PosScreen> {
 
     try {
       await syncService.sincronizacionCompletaSegura();
-      if (!mounted || !context.mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Sincronización exitosa')));
+      
+      if (!contextParam.mounted) return;
+
+      Navigator.of(contextParam).pop();
+      ScaffoldMessenger.of(contextParam).showSnackBar(
+          const SnackBar(content: Text('Base de datos actualizada')));
           
     } catch (e) {
-      if (!mounted || !context.mounted) return;
+      if (!contextParam.mounted) return;
 
-      Navigator.of(context).pop();
+      Navigator.of(contextParam).pop();
 
-      String mensajeAmigable = '❌ Ocurrió un error inesperado';
-      final errorText = e.toString();
-
-      if (errorText.contains('SocketException') || errorText.contains('Failed host lookup')) {
-        mensajeAmigable = '📡 No hay conexión a internet. Revisa tu red.';
-      } else if (errorText.contains('HttpException')) {
-        mensajeAmigable = '☁️ Error al conectar con el servidor de la nube.';
-      } else if (errorText.contains('timeout')) {
-        mensajeAmigable = '⏱️ La conexión tardó demasiado.';
+      String mensajeAmigable = 'Error de sincronización';
+      if (e.toString().contains('SocketException')) {
+        mensajeAmigable = 'Sin conexión a internet.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(mensajeAmigable),
-          backgroundColor: Colors.redAccent,
-          duration: const Duration(seconds: 4),
-        ),
+      ScaffoldMessenger.of(contextParam).showSnackBar(
+        SnackBar(content: Text(mensajeAmigable), backgroundColor: Colors.redAccent),
       );
     }
   }
@@ -103,29 +96,28 @@ class _PosScreenState extends State<PosScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SISTEMA DE VENTAS'),
+        title: const Text('SISTEMA DE VENTAS', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.blueGrey[900],
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: Icon(
-              Icons.sync,
-              color: _cart.isNotEmpty ? Colors.grey : Colors.blue,
-              size: 28,
-            ),
-            tooltip: 'Actualizar Stock y Productos',
+            icon: const Icon(Icons.sync, size: 28),
             onPressed: () => _ejecutarSyncTotal(context),
+            tooltip: 'Sincronizar',
           ),
           IconButton(
-            icon: const Icon(Icons.analytics, size: 30),
+            icon: const Icon(Icons.analytics_outlined, size: 30),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (c) => const DailySummaryScreen()),
             ),
-          )
+          ),
+          const SizedBox(width: 10),
         ],
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
+          preferredSize: const Size.fromHeight(70),
           child: Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
             child: TextField(
               decoration: InputDecoration(
                 hintText: 'Buscar producto...',
@@ -151,21 +143,17 @@ class _PosScreenState extends State<PosScreen> {
                       ? db.watchProductosOrdenadosPorVentas() 
                       : (db.select(db.productos)..where((p) => p.nombre.lower().contains(_searchQuery.toLowerCase()))).watch(),
                     builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        return Center(child: Text("Error en la base de datos: ${snapshot.error}"));
-                      }
-  
                       if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
   
                       final productos = snapshot.data!;
                       
                       return GridView.builder(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(12),
                         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3, 
-                          childAspectRatio: 1.15,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10
+                          childAspectRatio: 0.82,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12
                         ),
                         itemCount: productos.length,
                         itemBuilder: (context, i) {
@@ -173,62 +161,53 @@ class _PosScreenState extends State<PosScreen> {
                           final colorSemaforo = _getColorSemaforo(p.stockLocal);
                           
                           return Card(
-                            elevation: 3,
+                            clipBehavior: Clip.antiAlias,
+                            elevation: 4,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(15),
-                              side: BorderSide(
-                                color: colorSemaforo.withOpacity(0.4),
-                                width: 2,
-                              ),
+                              side: BorderSide(color: colorSemaforo, width: 2),
                             ),
                             child: InkWell(
-                              onTap: p.stockLocal > 0
-                                  ? () => setState(() => _cart.add(p))
-                                  : null,
-                              child: Stack(
+                              onTap: p.stockLocal > 0 ? () => setState(() => _cart.add(p)) : null,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Positioned(
-                                    top: 10,
-                                    right: 10,
+                                  Expanded(
+                                    flex: 5,
                                     child: Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        color: colorSemaforo,
-                                        shape: BoxShape.circle,
-                                      ),
+                                      color: Colors.white,
+                                      child: p.imagenUrl != null 
+                                        ? CachedNetworkImage(
+                                            imageUrl: p.imagenUrl!,
+                                            fit: BoxFit.contain,
+                                            placeholder: (c, url) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                            errorWidget: (c, url, e) => const Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+                                          )
+                                        : const Icon(Icons.inventory_2_outlined, size: 40, color: Colors.grey),
                                     ),
                                   ),
-                                  Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          p.nombre,
-                                          style: const TextStyle(fontWeight: FontWeight.bold),
-                                          textAlign: TextAlign.center,
-                                          maxLines: 2,
-                                        ),
-                                        Text(
-                                          '\$${p.precio.toStringAsFixed(2)}',
-                                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: colorSemaforo.withOpacity(0.1),
-                                            borderRadius: BorderRadius.circular(10),
+                                  Expanded(
+                                    flex: 4,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(p.nombre, 
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          child: Text(
-                                            'Stock: ${p.stockLocal}',
-                                            style: TextStyle(
-                                              color: colorSemaforo,
-                                              fontWeight: FontWeight.bold,
-                                            ),
+                                          const SizedBox(height: 4),
+                                          Text('\$${p.precio.toStringAsFixed(2)}', 
+                                            style: const TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold)
                                           ),
-                                        ),
-                                      ],
+                                          Text('Stock: ${p.stockLocal}', 
+                                            style: TextStyle(fontSize: 11, color: colorSemaforo, fontWeight: FontWeight.bold)
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -254,54 +233,64 @@ class _PosScreenState extends State<PosScreen> {
   Widget _buildCarrito(BuildContext context) {
     final total = _cart.fold(0.0, (s, item) => s + item.precio);
     return Container(
-      width: 350,
-      color: Colors.blueGrey[50],
+      width: 380,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(left: BorderSide(color: Colors.black12))
+      ),
       child: Column(
         children: [
           const Padding(
-            padding: EdgeInsets.all(20),
-            child: Text('DETALLE DE VENTA', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            padding: EdgeInsets.symmetric(vertical: 25),
+            child: Text('DETALLE DE VENTA', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
           ),
+          const Divider(height: 1),
           Expanded(
-            child: ListView.builder(
-              itemCount: _cart.length,
-              itemBuilder: (context, i) => ListTile(
-                title: Text(_cart[i].nombre),
-                subtitle: Text('\$${_cart[i].precio.toStringAsFixed(2)}'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.remove_circle, color: Colors.red),
-                  onPressed: () => setState(() => _cart.removeAt(i)),
+            child: _cart.isEmpty 
+              ? const Center(child: Text("Carrito vacío", style: TextStyle(color: Colors.grey)))
+              : ListView.separated(
+                  itemCount: _cart.length,
+                  separatorBuilder: (c, i) => const Divider(height: 1),
+                  itemBuilder: (context, i) => ListTile(
+                    title: Text(_cart[i].nombre, style: const TextStyle(fontWeight: FontWeight.w500)),
+                    subtitle: Text('\$${_cart[i].precio.toStringAsFixed(2)}'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                      onPressed: () => setState(() => _cart.removeAt(i)),
+                    ),
+                  ),
                 ),
-              ),
-            ),
           ),
           Container(
-            padding: const EdgeInsets.all(20),
-            color: Colors.white,
+            padding: const EdgeInsets.all(25),
+            decoration: BoxDecoration(
+              color: Colors.blueGrey[50],
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))
+            ),
             child: Column(
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('TOTAL:', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    Text(
-                      '\$${total.toStringAsFixed(2)}',
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.green),
+                    const Text('TOTAL:', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                    Text('\$${total.toStringAsFixed(2)}',
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 15),
                 SizedBox(
                   width: double.infinity,
-                  height: 60,
+                  height: 65,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+                      backgroundColor: Colors.green[700],
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 5,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                     ),
                     onPressed: _cart.isEmpty ? null : () => _finalizarVenta(context),
-                    child: const Text('COBRAR', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    child: const Text('FINALIZAR COBRO', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -317,11 +306,11 @@ class _PosScreenState extends State<PosScreen> {
       duration: const Duration(milliseconds: 300),
       height: (_showSuccessMessage || _errorMessage != null) ? 60 : 0,
       width: double.infinity,
-      color: _showSuccessMessage ? Colors.green : Colors.red,
+      color: _showSuccessMessage ? Colors.green : Colors.redAccent,
       child: Center(
         child: Text(
-          _showSuccessMessage ? '¡Venta Exitosa!' : (_errorMessage ?? ''),
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          _showSuccessMessage ? '✅ VENTA REGISTRADA' : (_errorMessage ?? ''),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),
     );
@@ -329,19 +318,19 @@ class _PosScreenState extends State<PosScreen> {
 
   Future<void> _finalizarVenta(BuildContext context) async {
     final db = Provider.of<AppDatabase>(context, listen: false);
-    
-    final String id = _uuid.v4(); 
+    final String idVenta = _uuid.v4(); 
+    final double montoTotal = _cart.fold(0.0, (s, i) => s + i.precio);
     
     try {
       await db.registrarVentaCompleta(
         VentasCompanion.insert(
-          id: id,
-          total: _cart.fold(0.0, (s, i) => s + i.precio),
+          id: idVenta,
+          total: montoTotal,
           fecha: d.Value(DateTime.now()),
           sincronizado: const d.Value(false),
         ),
         _cart.map((p) => VentaDetallesCompanion.insert(
-          ventaId: id,
+          ventaId: idVenta,
           productoId: p.id,
           cantidad: 1,
           precioUnitario: p.precio,
@@ -354,7 +343,7 @@ class _PosScreenState extends State<PosScreen> {
       
     } catch (e) {
       if (!mounted) return;
-      setState(() => _errorMessage = e.toString());
+      setState(() => _errorMessage = "Error al guardar: $e");
     }
   }
 }

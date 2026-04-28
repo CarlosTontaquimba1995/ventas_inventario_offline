@@ -19,6 +19,7 @@ class SyncService {
           precio: d.Value((p['precio'] as num).toDouble()),
           precioCompra: d.Value((p['precio_compra'] as num?)?.toDouble() ?? 0.0),
           stockLocal: d.Value((p['stock_total'] as num?)?.toInt() ?? 0),
+          imagenUrl: d.Value(p['imagen_url'] as String?),
         );
       }).toList();
 
