@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ventas_inventario_offline/data/services/services/sync_service.dart';
@@ -12,6 +13,11 @@ void main() async {
     url: 'https://wejssxwahwipcahsyyen.supabase.co',
     anonKey: 'sb_publishable_p4ZDtVowA3QS5bwMpXFv1w_GUgDPJwJ',
   );
+
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
 
   final database = AppDatabase();
   final syncService = SyncService(database);

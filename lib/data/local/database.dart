@@ -10,9 +10,8 @@ class Productos extends Table {
   TextColumn get id => text()();
   TextColumn get nombre => text()();
   RealColumn get precio => real()(); 
-  RealColumn get precioCompra => real().nullable().named('precio_compra')();
-  IntColumn get stockLocal =>
-      integer().named('stock_total').withDefault(const Constant(0))();
+  RealColumn get precioCompra => real().nullable().named('precio_compra')(); 
+  IntColumn get stockLocal => integer().named('stock_total').withDefault(const Constant(0))();
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -34,58 +33,44 @@ class VentaDetalles extends Table {
   RealColumn get precioUnitario => real()();
 }
 
+class ResumenProductoGlobal {
+  final String nombre;
+  final int cantidadTotal;
+  final double capitalTotal;
+  final double gananciaTotal;
+  ResumenProductoGlobal({required this.nombre, required this.cantidadTotal, required this.capitalTotal, required this.gananciaTotal});
+}
+
 class DetalleConCalculo {
   final String nombre;
   final int cantidad;
   final double precioVentaUnitario;
   final double capitalTotalFila;
   final double gananciaTotalFila;
-
-  DetalleConCalculo({
-    required this.nombre,
-    required this.cantidad,
-    required this.precioVentaUnitario,
-    required this.capitalTotalFila,
-    required this.gananciaTotalFila,
-  });
+  DetalleConCalculo({required this.nombre, required this.cantidad, required this.precioVentaUnitario, required this.capitalTotalFila, required this.gananciaTotalFila});
 }
 
 class VentaConDetalles {
   final Venta venta;
   final List<VentaDetalle> detallesRaw;
   final List<Producto> productosRelacionados;
-
   VentaConDetalles(this.venta, this.detallesRaw, this.productosRelacionados);
 
   List<DetalleConCalculo> get desglosePorProducto {
     return detallesRaw.map((d) {
-      final p = productosRelacionados.firstWhere(
-        (prod) => prod.id == d.productoId,
-        orElse: () => const Producto(
-          id: '',
-          nombre: 'Desconocido',
-          precio: 0,
-          stockLocal: 0,
-          precioCompra: 0,
-        ),
-      );
-
+      final p = productosRelacionados.firstWhere((prod) => prod.id == d.productoId,
+        orElse: () => const Producto(id: '', nombre: 'Desconocido', precio: 0, stockLocal: 0, precioCompra: 0));
       double costoUnitario = p.precioCompra ?? 0.0;
-      double ventaTotalFila = d.precioUnitario * d.cantidad;
-      double capitalTotalFila = costoUnitario * d.cantidad;
-
       return DetalleConCalculo(
         nombre: p.nombre,
         cantidad: d.cantidad,
         precioVentaUnitario: d.precioUnitario,
-        capitalTotalFila: capitalTotalFila,
-        gananciaTotalFila: ventaTotalFila - capitalTotalFila,
+        capitalTotalFila: costoUnitario * d.cantidad,
+        gananciaTotalFila: (d.precioUnitario * d.cantidad) - (costoUnitario * d.cantidad),
       );
     }).toList();
   }
-
-  double get capitalTotalVenta =>
-      desglosePorProducto.fold(0, (sum, item) => sum + item.capitalTotalFila);
+  double get capitalTotalVenta => desglosePorProducto.fold(0, (sum, item) => sum + item.capitalTotalFila);
   double get gananciaTotalVenta => venta.total - capitalTotalVenta;
 }
 
@@ -99,73 +84,68 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<Producto>> watchProductosOrdenadosPorVentas() {
     final sumaCantidad = ventaDetalles.cantidad.sum();
     final query = select(productos).join([
-      leftOuterJoin(
-        ventaDetalles,
-        ventaDetalles.productoId.equalsExp(productos.id),
-      ),
+      leftOuterJoin(ventaDetalles, ventaDetalles.productoId.equalsExp(productos.id)),
     ]);
     query.addColumns([sumaCantidad]);
     query.groupBy([productos.id]);
-    query.orderBy([
-      OrderingTerm(expression: sumaCantidad, mode: OrderingMode.desc),
-    ]);
-    return query.watch().map(
-      (rows) => rows.map((row) => row.readTable(productos)).toList(),
-    );
+    query.orderBy([OrderingTerm(expression: sumaCantidad, mode: OrderingMode.desc)]);
+    return query.watch().map((rows) => rows.map((row) => row.readTable(productos)).toList());
   }
 
-  Stream<List<VentaConDetalles>> watchVentasDelDiaDetalladas() {
-    final ahora = DateTime.now();
-    final inicioDia = DateTime(ahora.year, ahora.month, ahora.day);
+  Stream<List<ResumenProductoGlobal>> watchResumenGlobalHoy() {
+    final inicioDia = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final query = select(ventaDetalles).join([
+      innerJoin(ventas, ventas.id.equalsExp(ventaDetalles.ventaId)),
+      innerJoin(productos, productos.id.equalsExp(ventaDetalles.productoId)),
+    ])..where(ventas.fecha.isBiggerOrEqualValue(inicioDia));
 
-    return (select(ventas)
-          ..where((t) => t.fecha.isBiggerOrEqualValue(inicioDia))
-          ..orderBy([
-            (t) => OrderingTerm(expression: t.fecha, mode: OrderingMode.desc),
-          ]))
-        .watch()
-        .asyncMap((listaVentas) async {
-          final todosLosProductos = await select(productos).get();
-          final listaCompleta = <VentaConDetalles>[];
-
-          for (var v in listaVentas) {
-            final detalles = await (select(
-              ventaDetalles,
-            )..where((t) => t.ventaId.equals(v.id))).get();
-            listaCompleta.add(VentaConDetalles(v, detalles, todosLosProductos));
-          }
-          return listaCompleta;
+    return query.watch().map((rows) {
+      final Map<String, ResumenProductoGlobal> agrupado = {};
+      for (final row in rows) {
+        final p = row.readTable(productos);
+        final d = row.readTable(ventaDetalles);
+        final capitalFila = (p.precioCompra ?? 0.0) * d.cantidad;
+        final gananciaFila = (d.precioUnitario * d.cantidad) - capitalFila;
+        if (agrupado.containsKey(p.id)) {
+          final ex = agrupado[p.id]!;
+          agrupado[p.id] = ResumenProductoGlobal(nombre: p.nombre, cantidadTotal: ex.cantidadTotal + d.cantidad, capitalTotal: ex.capitalTotal + capitalFila, gananciaTotal: ex.gananciaTotal + gananciaFila);
+        } else {
+          agrupado[p.id] = ResumenProductoGlobal(nombre: p.nombre, cantidadTotal: d.cantidad, capitalTotal: capitalFila, gananciaTotal: gananciaFila);
+        }
+      }
+      return agrupado.values.toList();
     });
   }
 
-  Stream<List<Venta>> watchVentasPendientes() {
-    return (select(ventas)..where((t) => t.sincronizado.equals(false))).watch();
+  Stream<List<VentaConDetalles>> watchVentasDelDiaDetalladas() {
+    final inicioDia = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    return (select(ventas)..where((t) => t.fecha.isBiggerOrEqualValue(inicioDia))..orderBy([(t) => OrderingTerm(expression: t.fecha, mode: OrderingMode.desc)]))
+        .watch().asyncMap((listaVentas) async {
+      final todosLosProductos = await select(productos).get();
+      final lista = <VentaConDetalles>[];
+      for (var v in listaVentas) {
+        final detalles = await (select(ventaDetalles)..where((t) => t.ventaId.equals(v.id))).get();
+        lista.add(VentaConDetalles(v, detalles, todosLosProductos));
+      }
+      return lista;
+    });
   }
+
+  Stream<List<Venta>> watchVentasPendientes() => (select(ventas)..where((t) => t.sincronizado.equals(false))).watch();
 
   Future<void> registrarVentaCompleta(VentasCompanion venta, List<VentaDetallesCompanion> detalles) async {
     await transaction(() async {
       await into(ventas).insert(venta);
       for (var d in detalles) {
         await into(ventaDetalles).insert(d);
-        final p = await (select(
-          productos,
-        )..where((tbl) => tbl.id.equals(d.productoId.value))).getSingle();
-        await (update(
-          productos,
-        )..where((tbl) => tbl.id.equals(d.productoId.value))).write(
-          ProductosCompanion(
-            stockLocal: Value(p.stockLocal - d.cantidad.value),
-          ),
-        );
+        final p = await (select(productos)..where((tbl) => tbl.id.equals(d.productoId.value))).getSingle();
+        await (update(productos)..where((tbl) => tbl.id.equals(d.productoId.value))).write(ProductosCompanion(stockLocal: Value(p.stockLocal - d.cantidad.value)));
       }
     });
   }
 
   Future<void> insertarProductos(List<ProductosCompanion> lista) async {
-    await batch(
-      (batch) =>
-          batch.insertAll(productos, lista, mode: InsertMode.insertOrReplace),
-    );
+    await batch((batch) => batch.insertAll(productos, lista, mode: InsertMode.insertOrReplace));
   }
 }
 
