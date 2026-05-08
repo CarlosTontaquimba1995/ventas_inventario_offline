@@ -794,6 +794,19 @@ class $VentaDetallesTable extends VentaDetalles
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _pagadoMeta = const VerificationMeta('pagado');
+  @override
+  late final GeneratedColumn<bool> pagado = GeneratedColumn<bool>(
+    'pagado',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("pagado" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -801,6 +814,7 @@ class $VentaDetallesTable extends VentaDetalles
     productoId,
     cantidad,
     precioUnitario,
+    pagado,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -852,6 +866,12 @@ class $VentaDetallesTable extends VentaDetalles
     } else if (isInserting) {
       context.missing(_precioUnitarioMeta);
     }
+    if (data.containsKey('pagado')) {
+      context.handle(
+        _pagadoMeta,
+        pagado.isAcceptableOrUnknown(data['pagado']!, _pagadoMeta),
+      );
+    }
     return context;
   }
 
@@ -881,6 +901,10 @@ class $VentaDetallesTable extends VentaDetalles
         DriftSqlType.double,
         data['${effectivePrefix}precio_unitario'],
       )!,
+      pagado: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}pagado'],
+      )!,
     );
   }
 
@@ -896,12 +920,14 @@ class VentaDetalle extends DataClass implements Insertable<VentaDetalle> {
   final String productoId;
   final int cantidad;
   final double precioUnitario;
+  final bool pagado;
   const VentaDetalle({
     required this.id,
     required this.ventaId,
     required this.productoId,
     required this.cantidad,
     required this.precioUnitario,
+    required this.pagado,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -911,6 +937,7 @@ class VentaDetalle extends DataClass implements Insertable<VentaDetalle> {
     map['producto_id'] = Variable<String>(productoId);
     map['cantidad'] = Variable<int>(cantidad);
     map['precio_unitario'] = Variable<double>(precioUnitario);
+    map['pagado'] = Variable<bool>(pagado);
     return map;
   }
 
@@ -921,6 +948,7 @@ class VentaDetalle extends DataClass implements Insertable<VentaDetalle> {
       productoId: Value(productoId),
       cantidad: Value(cantidad),
       precioUnitario: Value(precioUnitario),
+      pagado: Value(pagado),
     );
   }
 
@@ -935,6 +963,7 @@ class VentaDetalle extends DataClass implements Insertable<VentaDetalle> {
       productoId: serializer.fromJson<String>(json['productoId']),
       cantidad: serializer.fromJson<int>(json['cantidad']),
       precioUnitario: serializer.fromJson<double>(json['precioUnitario']),
+      pagado: serializer.fromJson<bool>(json['pagado']),
     );
   }
   @override
@@ -946,6 +975,7 @@ class VentaDetalle extends DataClass implements Insertable<VentaDetalle> {
       'productoId': serializer.toJson<String>(productoId),
       'cantidad': serializer.toJson<int>(cantidad),
       'precioUnitario': serializer.toJson<double>(precioUnitario),
+      'pagado': serializer.toJson<bool>(pagado),
     };
   }
 
@@ -955,12 +985,14 @@ class VentaDetalle extends DataClass implements Insertable<VentaDetalle> {
     String? productoId,
     int? cantidad,
     double? precioUnitario,
+    bool? pagado,
   }) => VentaDetalle(
     id: id ?? this.id,
     ventaId: ventaId ?? this.ventaId,
     productoId: productoId ?? this.productoId,
     cantidad: cantidad ?? this.cantidad,
     precioUnitario: precioUnitario ?? this.precioUnitario,
+    pagado: pagado ?? this.pagado,
   );
   VentaDetalle copyWithCompanion(VentaDetallesCompanion data) {
     return VentaDetalle(
@@ -973,6 +1005,7 @@ class VentaDetalle extends DataClass implements Insertable<VentaDetalle> {
       precioUnitario: data.precioUnitario.present
           ? data.precioUnitario.value
           : this.precioUnitario,
+      pagado: data.pagado.present ? data.pagado.value : this.pagado,
     );
   }
 
@@ -983,14 +1016,15 @@ class VentaDetalle extends DataClass implements Insertable<VentaDetalle> {
           ..write('ventaId: $ventaId, ')
           ..write('productoId: $productoId, ')
           ..write('cantidad: $cantidad, ')
-          ..write('precioUnitario: $precioUnitario')
+          ..write('precioUnitario: $precioUnitario, ')
+          ..write('pagado: $pagado')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, ventaId, productoId, cantidad, precioUnitario);
+      Object.hash(id, ventaId, productoId, cantidad, precioUnitario, pagado);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -999,7 +1033,8 @@ class VentaDetalle extends DataClass implements Insertable<VentaDetalle> {
           other.ventaId == this.ventaId &&
           other.productoId == this.productoId &&
           other.cantidad == this.cantidad &&
-          other.precioUnitario == this.precioUnitario);
+          other.precioUnitario == this.precioUnitario &&
+          other.pagado == this.pagado);
 }
 
 class VentaDetallesCompanion extends UpdateCompanion<VentaDetalle> {
@@ -1008,12 +1043,14 @@ class VentaDetallesCompanion extends UpdateCompanion<VentaDetalle> {
   final Value<String> productoId;
   final Value<int> cantidad;
   final Value<double> precioUnitario;
+  final Value<bool> pagado;
   const VentaDetallesCompanion({
     this.id = const Value.absent(),
     this.ventaId = const Value.absent(),
     this.productoId = const Value.absent(),
     this.cantidad = const Value.absent(),
     this.precioUnitario = const Value.absent(),
+    this.pagado = const Value.absent(),
   });
   VentaDetallesCompanion.insert({
     this.id = const Value.absent(),
@@ -1021,6 +1058,7 @@ class VentaDetallesCompanion extends UpdateCompanion<VentaDetalle> {
     required String productoId,
     required int cantidad,
     required double precioUnitario,
+    this.pagado = const Value.absent(),
   }) : ventaId = Value(ventaId),
        productoId = Value(productoId),
        cantidad = Value(cantidad),
@@ -1031,6 +1069,7 @@ class VentaDetallesCompanion extends UpdateCompanion<VentaDetalle> {
     Expression<String>? productoId,
     Expression<int>? cantidad,
     Expression<double>? precioUnitario,
+    Expression<bool>? pagado,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1038,6 +1077,7 @@ class VentaDetallesCompanion extends UpdateCompanion<VentaDetalle> {
       if (productoId != null) 'producto_id': productoId,
       if (cantidad != null) 'cantidad': cantidad,
       if (precioUnitario != null) 'precio_unitario': precioUnitario,
+      if (pagado != null) 'pagado': pagado,
     });
   }
 
@@ -1047,6 +1087,7 @@ class VentaDetallesCompanion extends UpdateCompanion<VentaDetalle> {
     Value<String>? productoId,
     Value<int>? cantidad,
     Value<double>? precioUnitario,
+    Value<bool>? pagado,
   }) {
     return VentaDetallesCompanion(
       id: id ?? this.id,
@@ -1054,6 +1095,7 @@ class VentaDetallesCompanion extends UpdateCompanion<VentaDetalle> {
       productoId: productoId ?? this.productoId,
       cantidad: cantidad ?? this.cantidad,
       precioUnitario: precioUnitario ?? this.precioUnitario,
+      pagado: pagado ?? this.pagado,
     );
   }
 
@@ -1075,6 +1117,9 @@ class VentaDetallesCompanion extends UpdateCompanion<VentaDetalle> {
     if (precioUnitario.present) {
       map['precio_unitario'] = Variable<double>(precioUnitario.value);
     }
+    if (pagado.present) {
+      map['pagado'] = Variable<bool>(pagado.value);
+    }
     return map;
   }
 
@@ -1085,7 +1130,8 @@ class VentaDetallesCompanion extends UpdateCompanion<VentaDetalle> {
           ..write('ventaId: $ventaId, ')
           ..write('productoId: $productoId, ')
           ..write('cantidad: $cantidad, ')
-          ..write('precioUnitario: $precioUnitario')
+          ..write('precioUnitario: $precioUnitario, ')
+          ..write('pagado: $pagado')
           ..write(')'))
         .toString();
   }
@@ -1727,6 +1773,7 @@ typedef $$VentaDetallesTableCreateCompanionBuilder =
       required String productoId,
       required int cantidad,
       required double precioUnitario,
+      Value<bool> pagado,
     });
 typedef $$VentaDetallesTableUpdateCompanionBuilder =
     VentaDetallesCompanion Function({
@@ -1735,6 +1782,7 @@ typedef $$VentaDetallesTableUpdateCompanionBuilder =
       Value<String> productoId,
       Value<int> cantidad,
       Value<double> precioUnitario,
+      Value<bool> pagado,
     });
 
 final class $$VentaDetallesTableReferences
@@ -1804,6 +1852,11 @@ class $$VentaDetallesTableFilterComposer
 
   ColumnFilters<double> get precioUnitario => $composableBuilder(
     column: $table.precioUnitario,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get pagado => $composableBuilder(
+    column: $table.pagado,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1878,6 +1931,11 @@ class $$VentaDetallesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get pagado => $composableBuilder(
+    column: $table.pagado,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$VentasTableOrderingComposer get ventaId {
     final $$VentasTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -1944,6 +2002,9 @@ class $$VentaDetallesTableAnnotationComposer
     column: $table.precioUnitario,
     builder: (column) => column,
   );
+
+  GeneratedColumn<bool> get pagado =>
+      $composableBuilder(column: $table.pagado, builder: (column) => column);
 
   $$VentasTableAnnotationComposer get ventaId {
     final $$VentasTableAnnotationComposer composer = $composerBuilder(
@@ -2025,12 +2086,14 @@ class $$VentaDetallesTableTableManager
                 Value<String> productoId = const Value.absent(),
                 Value<int> cantidad = const Value.absent(),
                 Value<double> precioUnitario = const Value.absent(),
+                Value<bool> pagado = const Value.absent(),
               }) => VentaDetallesCompanion(
                 id: id,
                 ventaId: ventaId,
                 productoId: productoId,
                 cantidad: cantidad,
                 precioUnitario: precioUnitario,
+                pagado: pagado,
               ),
           createCompanionCallback:
               ({
@@ -2039,12 +2102,14 @@ class $$VentaDetallesTableTableManager
                 required String productoId,
                 required int cantidad,
                 required double precioUnitario,
+                Value<bool> pagado = const Value.absent(),
               }) => VentaDetallesCompanion.insert(
                 id: id,
                 ventaId: ventaId,
                 productoId: productoId,
                 cantidad: cantidad,
                 precioUnitario: precioUnitario,
+                pagado: pagado,
               ),
           withReferenceMapper: (p0) => p0
               .map(

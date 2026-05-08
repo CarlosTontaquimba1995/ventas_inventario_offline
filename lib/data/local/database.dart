@@ -13,7 +13,6 @@ class Productos extends Table {
   RealColumn get precioCompra => real().nullable().named('precio_compra')(); 
   IntColumn get stockLocal => integer().named('stock_total').withDefault(const Constant(0))();
   TextColumn get imagenUrl => text().nullable().named('imagen_url')(); 
-
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -33,6 +32,7 @@ class VentaDetalles extends Table {
   TextColumn get productoId => text().references(Productos, #id)();
   IntColumn get cantidad => integer()();
   RealColumn get precioUnitario => real()();
+  BoolColumn get pagado => boolean().withDefault(const Constant(true))();
 }
 
 class ResumenProductoGlobal {
@@ -40,16 +40,34 @@ class ResumenProductoGlobal {
   final int cantidadTotal;
   final double capitalTotal;
   final double gananciaTotal;
-  ResumenProductoGlobal({required this.nombre, required this.cantidadTotal, required this.capitalTotal, required this.gananciaTotal});
+  final double deudaPendiente;
+  ResumenProductoGlobal({
+    required this.nombre,
+    required this.cantidadTotal,
+    required this.capitalTotal,
+    required this.gananciaTotal,
+    required this.deudaPendiente,
+  });
 }
 
 class DetalleConCalculo {
+  final int detalleId;
   final String nombre;
   final int cantidad;
   final double precioVentaUnitario;
   final double capitalTotalFila;
   final double gananciaTotalFila;
-  DetalleConCalculo({required this.nombre, required this.cantidad, required this.precioVentaUnitario, required this.capitalTotalFila, required this.gananciaTotalFila});
+  final bool fuePagado;
+
+  DetalleConCalculo({
+    required this.detalleId,
+    required this.nombre,
+    required this.cantidad,
+    required this.precioVentaUnitario,
+    required this.capitalTotalFila,
+    required this.gananciaTotalFila,
+    required this.fuePagado,
+  });
 }
 
 class VentaConDetalles {
@@ -61,19 +79,30 @@ class VentaConDetalles {
   List<DetalleConCalculo> get desglosePorProducto {
     return detallesRaw.map((d) {
       final p = productosRelacionados.firstWhere((prod) => prod.id == d.productoId,
-        orElse: () => const Producto(id: '', nombre: 'Desconocido', precio: 0, stockLocal: 0, precioCompra: 0));
+        orElse: () => const Producto(
+          id: '',
+          nombre: 'Desconocido',
+          precio: 0,
+          stockLocal: 0,
+        ),
+      );
       double costoUnitario = p.precioCompra ?? 0.0;
       return DetalleConCalculo(
+        detalleId: d.id,
         nombre: p.nombre,
         cantidad: d.cantidad,
         precioVentaUnitario: d.precioUnitario,
         capitalTotalFila: costoUnitario * d.cantidad,
         gananciaTotalFila: (d.precioUnitario * d.cantidad) - (costoUnitario * d.cantidad),
+        fuePagado: d.pagado,
       );
     }).toList();
   }
-  double get capitalTotalVenta => desglosePorProducto.fold(0, (sum, item) => sum + item.capitalTotalFila);
-  double get gananciaTotalVenta => venta.total - capitalTotalVenta;
+
+  double get efectivoReal => desglosePorProducto
+      .where((d) => d.fuePagado)
+      .fold(0, (sum, item) => sum + (item.precioVentaUnitario * item.cantidad));
+  double get deudaPendiente => venta.total - efectivoReal;
 }
 
 @DriftDatabase(tables: [Productos, Ventas, VentaDetalles])
@@ -86,7 +115,10 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<Producto>> watchProductosOrdenadosPorVentas() {
     final sumaCantidad = ventaDetalles.cantidad.sum();
     final query = select(productos).join([
-      leftOuterJoin(ventaDetalles, ventaDetalles.productoId.equalsExp(productos.id)),
+      leftOuterJoin(
+        ventaDetalles,
+        ventaDetalles.productoId.equalsExp(productos.id),
+      ),
     ]);
     query.addColumns([sumaCantidad]);
     query.groupBy([productos.id]);
@@ -106,13 +138,28 @@ class AppDatabase extends _$AppDatabase {
       for (final row in rows) {
         final p = row.readTable(productos);
         final d = row.readTable(ventaDetalles);
-        final capitalFila = (p.precioCompra ?? 0.0) * d.cantidad;
+        final costoUnitario = p.precioCompra ?? 0.0;
+        final capitalFila = costoUnitario * d.cantidad;
         final gananciaFila = (d.precioUnitario * d.cantidad) - capitalFila;
+        final deudaFila = d.pagado ? 0.0 : (d.precioUnitario * d.cantidad);
+
         if (agrupado.containsKey(p.id)) {
           final ex = agrupado[p.id]!;
-          agrupado[p.id] = ResumenProductoGlobal(nombre: p.nombre, cantidadTotal: ex.cantidadTotal + d.cantidad, capitalTotal: ex.capitalTotal + capitalFila, gananciaTotal: ex.gananciaTotal + gananciaFila);
+          agrupado[p.id] = ResumenProductoGlobal(
+            nombre: p.nombre,
+            cantidadTotal: ex.cantidadTotal + d.cantidad,
+            capitalTotal: ex.capitalTotal + capitalFila,
+            gananciaTotal: ex.gananciaTotal + gananciaFila,
+            deudaPendiente: ex.deudaPendiente + deudaFila,
+          );
         } else {
-          agrupado[p.id] = ResumenProductoGlobal(nombre: p.nombre, cantidadTotal: d.cantidad, capitalTotal: capitalFila, gananciaTotal: gananciaFila);
+          agrupado[p.id] = ResumenProductoGlobal(
+            nombre: p.nombre,
+            cantidadTotal: d.cantidad,
+            capitalTotal: capitalFila,
+            gananciaTotal: gananciaFila,
+            deudaPendiente: deudaFila,
+          );
         }
       }
       return agrupado.values.toList();
@@ -131,6 +178,36 @@ class AppDatabase extends _$AppDatabase {
       }
       return lista;
     });
+  }
+
+  Stream<List<VentaConDetalles>> watchCarteraFiadosPendientes() {
+    return (select(ventas)..orderBy([
+          (t) => OrderingTerm(expression: t.fecha, mode: OrderingMode.desc),
+        ]))
+        .watch()
+        .asyncMap((listaVentas) async {
+          final todosLosProductos = await select(productos).get();
+          final listaConDeudas = <VentaConDetalles>[];
+          for (var v in listaVentas) {
+            final detallesFiados =
+                await (select(ventaDetalles)..where(
+                      (t) => t.ventaId.equals(v.id) & t.pagado.equals(false),
+                    ))
+                    .get();
+            if (detallesFiados.isNotEmpty) {
+              listaConDeudas.add(
+                VentaConDetalles(v, detallesFiados, todosLosProductos),
+              );
+            }
+          }
+          return listaConDeudas;
+        });
+  }
+
+  Future<void> cobrarProductoFiado(int detalleId) async {
+    await (update(ventaDetalles)..where((t) => t.id.equals(detalleId))).write(
+      const VentaDetallesCompanion(pagado: Value(true)),
+    );
   }
 
   Stream<List<Venta>> watchVentasPendientes() => (select(ventas)..where((t) => t.sincronizado.equals(false))).watch();
