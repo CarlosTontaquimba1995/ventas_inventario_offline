@@ -10,9 +10,9 @@ class Productos extends Table {
   TextColumn get id => text()();
   TextColumn get nombre => text()();
   RealColumn get precio => real()(); 
-  RealColumn get precioCompra => real().nullable().named('precio_compra')(); 
+  RealColumn get precioCompra => real().nullable().named('precio_comp_prod')(); 
   IntColumn get stockLocal => integer().named('stock_total').withDefault(const Constant(0))();
-  TextColumn get imagenUrl => text().nullable().named('imagen_url')(); 
+  TextColumn get imagenUrl => text().nullable().named('img_url_prod')(); 
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -20,7 +20,7 @@ class Productos extends Table {
 class Ventas extends Table {
   TextColumn get id => text()();
   RealColumn get total => real()();
-  DateTimeColumn get fecha => dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get fecha => dateTime()(); 
   BoolColumn get sincronizado => boolean().withDefault(const Constant(false))();
   @override
   Set<Column> get primaryKey => {id};
@@ -33,6 +33,8 @@ class VentaDetalles extends Table {
   IntColumn get cantidad => integer()();
   RealColumn get precioUnitario => real()();
   BoolColumn get pagado => boolean().withDefault(const Constant(true))();
+  DateTimeColumn get fechaPago => dateTime().nullable()();
+  BoolColumn get sincronizado => boolean().withDefault(const Constant(false))();
 }
 
 class ResumenProductoGlobal {
@@ -58,7 +60,6 @@ class DetalleConCalculo {
   final double capitalTotalFila;
   final double gananciaTotalFila;
   final bool fuePagado;
-
   DetalleConCalculo({
     required this.detalleId,
     required this.nombre,
@@ -110,55 +111,146 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 3;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (m, from, to) async {
+      if (from < 2) await m.addColumn(ventaDetalles, ventaDetalles.fechaPago);
+      if (from < 3) {
+        await m.addColumn(ventaDetalles, ventaDetalles.sincronizado);
+      }
+    },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
+  );
+
+  Stream<int> watchConteoPendientes() {
+    return (select(ventas)..where((t) => t.sincronizado.equals(false)))
+        .watch()
+        .map((vList) => vList.length);
+  }
+
+  Future<void> registrarVentaCompleta(
+    VentasCompanion venta,
+    List<VentaDetallesCompanion> detalles,
+  ) async {
+    await transaction(() async {
+      final ahora = DateTime.now();
+
+      await into(ventas).insert(
+        venta.copyWith(fecha: Value(ahora), sincronizado: const Value(false)),
+      );
+
+      for (var d in detalles) {
+        final bool estaPagado = d.pagado.value;
+
+        await into(ventaDetalles).insert(
+          d.copyWith(
+            fechaPago: estaPagado ? Value(ahora) : const Value.absent(),
+            sincronizado: const Value(false),
+          ),
+        );
+
+        final p = await (select(
+          productos,
+        )..where((tbl) => tbl.id.equals(d.productoId.value))).getSingle();
+
+        await (update(
+          productos,
+        )..where((tbl) => tbl.id.equals(d.productoId.value))).write(
+          ProductosCompanion(
+            stockLocal: Value(p.stockLocal - d.cantidad.value),
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> cobrarProductoFiado(int detalleId) async {
+    await transaction(() async {
+      final detalle = await (select(
+        ventaDetalles,
+      )..where((t) => t.id.equals(detalleId))).getSingle();
+
+      await (update(ventaDetalles)..where((t) => t.id.equals(detalleId))).write(
+        VentaDetallesCompanion(
+          pagado: const Value(true),
+          fechaPago: Value(DateTime.now()),
+          sincronizado: const Value(false),
+        ),
+      );
+
+      await (update(ventas)..where((t) => t.id.equals(detalle.ventaId))).write(
+        const VentasCompanion(sincronizado: Value(false)),
+      );
+    });
+  }
 
   Stream<List<Producto>> watchProductosOrdenadosPorVentas() {
-    final sumaCantidad = ventaDetalles.cantidad.sum();
-    final query = select(productos).join([
+    final suma = ventaDetalles.cantidad.sum();
+    final q = select(productos).join([
       leftOuterJoin(
         ventaDetalles,
         ventaDetalles.productoId.equalsExp(productos.id),
-      ),
+      )
     ]);
-    query.addColumns([sumaCantidad]);
-    query.groupBy([productos.id]);
-    query.orderBy([OrderingTerm(expression: sumaCantidad, mode: OrderingMode.desc)]);
-    return query.watch().map((rows) => rows.map((row) => row.readTable(productos)).toList());
+    q
+      ..addColumns([suma])
+      ..groupBy([productos.id])
+      ..orderBy([OrderingTerm(expression: suma, mode: OrderingMode.desc)]);
+    return q.watch().map(
+      (rows) => rows.map((r) => r.readTable(productos)).toList(),
+    );
   }
 
   Stream<List<ResumenProductoGlobal>> watchResumenGlobalHoy() {
-    final inicioDia = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final inicio = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
     final query = select(ventaDetalles).join([
       innerJoin(ventas, ventas.id.equalsExp(ventaDetalles.ventaId)),
       innerJoin(productos, productos.id.equalsExp(ventaDetalles.productoId)),
-    ])..where(ventas.fecha.isBiggerOrEqualValue(inicioDia));
+        ])..where(
+          ventas.fecha.isBiggerOrEqualValue(inicio) |
+              ventaDetalles.fechaPago.isBiggerOrEqualValue(inicio),
+        );
 
     return query.watch().map((rows) {
       final Map<String, ResumenProductoGlobal> agrupado = {};
       for (final row in rows) {
         final p = row.readTable(productos);
         final d = row.readTable(ventaDetalles);
-        final costoUnitario = p.precioCompra ?? 0.0;
-        final capitalFila = costoUnitario * d.cantidad;
-        final gananciaFila = (d.precioUnitario * d.cantidad) - capitalFila;
-        final deudaFila = d.pagado ? 0.0 : (d.precioUnitario * d.cantidad);
-
+        final v = row.readTable(ventas);
+        final costo = p.precioCompra ?? 0.0;
+        final bool esHoy =
+            v.fecha.isAfter(inicio) ||
+            (d.fechaPago != null && d.fechaPago!.isAfter(inicio));
+        double cap = 0, gan = 0, deu = 0;
+        if (esHoy) {
+          cap = costo * d.cantidad;
+          gan = (d.precioUnitario * d.cantidad) - cap;
+          deu = d.pagado ? 0.0 : (d.precioUnitario * d.cantidad);
+        }
         if (agrupado.containsKey(p.id)) {
           final ex = agrupado[p.id]!;
           agrupado[p.id] = ResumenProductoGlobal(
             nombre: p.nombre,
             cantidadTotal: ex.cantidadTotal + d.cantidad,
-            capitalTotal: ex.capitalTotal + capitalFila,
-            gananciaTotal: ex.gananciaTotal + gananciaFila,
-            deudaPendiente: ex.deudaPendiente + deudaFila,
+            capitalTotal: ex.capitalTotal + cap,
+            gananciaTotal: ex.gananciaTotal + gan,
+            deudaPendiente: ex.deudaPendiente + deu,
           );
         } else {
           agrupado[p.id] = ResumenProductoGlobal(
             nombre: p.nombre,
             cantidadTotal: d.cantidad,
-            capitalTotal: capitalFila,
-            gananciaTotal: gananciaFila,
-            deudaPendiente: deudaFila,
+            capitalTotal: cap,
+            gananciaTotal: gan,
+            deudaPendiente: deu,
           );
         }
       }
@@ -167,16 +259,27 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Stream<List<VentaConDetalles>> watchVentasDelDiaDetalladas() {
-    final inicioDia = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    return (select(ventas)..where((t) => t.fecha.isBiggerOrEqualValue(inicioDia))..orderBy([(t) => OrderingTerm(expression: t.fecha, mode: OrderingMode.desc)]))
-        .watch().asyncMap((listaVentas) async {
-      final todosLosProductos = await select(productos).get();
-      final lista = <VentaConDetalles>[];
-      for (var v in listaVentas) {
-        final detalles = await (select(ventaDetalles)..where((t) => t.ventaId.equals(v.id))).get();
-        lista.add(VentaConDetalles(v, detalles, todosLosProductos));
+    final inicio = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    return (select(ventas)
+          ..where((t) => t.fecha.isBiggerOrEqualValue(inicio))
+          ..orderBy([
+            (t) => OrderingTerm(expression: t.fecha, mode: OrderingMode.desc),
+          ]))
+        .watch()
+        .asyncMap((l) async {
+          final allP = await select(productos).get();
+          final res = <VentaConDetalles>[];
+          for (var v in l) {
+            final d = await (select(
+              ventaDetalles,
+            )..where((t) => t.ventaId.equals(v.id))).get();
+            res.add(VentaConDetalles(v, d, allP));
       }
-      return lista;
+          return res;
     });
   }
 
@@ -185,46 +288,27 @@ class AppDatabase extends _$AppDatabase {
           (t) => OrderingTerm(expression: t.fecha, mode: OrderingMode.desc),
         ]))
         .watch()
-        .asyncMap((listaVentas) async {
-          final todosLosProductos = await select(productos).get();
-          final listaConDeudas = <VentaConDetalles>[];
-          for (var v in listaVentas) {
-            final detallesFiados =
+        .asyncMap((l) async {
+          final allP = await select(productos).get();
+          final res = <VentaConDetalles>[];
+          for (var v in l) {
+            final d =
                 await (select(ventaDetalles)..where(
                       (t) => t.ventaId.equals(v.id) & t.pagado.equals(false),
                     ))
                     .get();
-            if (detallesFiados.isNotEmpty) {
-              listaConDeudas.add(
-                VentaConDetalles(v, detallesFiados, todosLosProductos),
-              );
-            }
+            if (d.isNotEmpty) res.add(VentaConDetalles(v, d, allP));
           }
-          return listaConDeudas;
+          return res;
         });
   }
 
-  Future<void> cobrarProductoFiado(int detalleId) async {
-    await (update(ventaDetalles)..where((t) => t.id.equals(detalleId))).write(
-      const VentaDetallesCompanion(pagado: Value(true)),
-    );
-  }
-
   Stream<List<Venta>> watchVentasPendientes() => (select(ventas)..where((t) => t.sincronizado.equals(false))).watch();
-
-  Future<void> registrarVentaCompleta(VentasCompanion venta, List<VentaDetallesCompanion> detalles) async {
-    await transaction(() async {
-      await into(ventas).insert(venta);
-      for (var d in detalles) {
-        await into(ventaDetalles).insert(d);
-        final p = await (select(productos)..where((tbl) => tbl.id.equals(d.productoId.value))).getSingle();
-        await (update(productos)..where((tbl) => tbl.id.equals(d.productoId.value))).write(ProductosCompanion(stockLocal: Value(p.stockLocal - d.cantidad.value)));
-      }
-    });
-  }
-
-  Future<void> insertarProductos(List<ProductosCompanion> lista) async {
-    await batch((batch) => batch.insertAll(productos, lista, mode: InsertMode.insertOrReplace));
+  
+  Future<void> insertarProductos(List<ProductosCompanion> l) async {
+    await batch(
+      (b) => b.insertAll(productos, l, mode: InsertMode.insertOrReplace),
+    );
   }
 }
 

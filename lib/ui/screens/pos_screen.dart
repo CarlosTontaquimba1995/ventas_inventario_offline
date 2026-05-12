@@ -137,9 +137,12 @@ class _PosScreenState extends State<PosScreen> {
                       ? db.watchProductosOrdenadosPorVentas() 
                       : (db.select(db.productos)..where((p) => p.nombre.lower().contains(_searchQuery.toLowerCase()))).watch(),
                     builder: (context, snapshot) {
-                      if (snapshot.hasError)
+                      if (snapshot.hasError) {
                         return Center(child: Text("Error: ${snapshot.error}"));
-                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                      }
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
                       
                       final productos = snapshot.data!;
                       return GridView.builder(
@@ -415,7 +418,7 @@ class _PosScreenState extends State<PosScreen> {
         VentasCompanion.insert(
           id: idVenta,
           total: montoTotal,
-          fecha: d.Value(DateTime.now()),
+          fecha: DateTime.now(),
           sincronizado: const d.Value(false),
         ),
         _cart

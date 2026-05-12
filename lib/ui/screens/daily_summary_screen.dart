@@ -42,29 +42,24 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
           actions: [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              child: StreamBuilder<List<Venta>>(
-                stream: db.watchVentasPendientes(),
+              child: StreamBuilder<int>(
+                stream: db.watchConteoPendientes(),
                 builder: (context, snapshot) {
-                  final pendientes = snapshot.data?.length ?? 0;
+                  final pendientes = snapshot.data ?? 0;
                   final bool tienePendientes = pendientes > 0;
-
                   return ElevatedButton.icon(
-                    onPressed: tienePendientes 
-                        ? () => syncService.sincronizacionCompletaSegura() 
+                    onPressed: tienePendientes
+                        ? () => syncService.sincronizacionCompletaSegura()
                         : null,
                     icon: Icon(
                       Icons.cloud_upload,
-                      color: tienePendientes
-                          ? Colors.white
-                          : const Color.fromARGB(151, 255, 255, 255),
+                      color: tienePendientes ? Colors.white : Colors.white38,
                     ),
                     label: Text(
                       'SINCRONIZAR ($pendientes)',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: tienePendientes
-                            ? Colors.white
-                            : const Color.fromARGB(151, 255, 255, 255),
+                        color: tienePendientes ? Colors.white : Colors.white38,
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
@@ -72,7 +67,6 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                           ? Colors.blue
                           : Colors.blueGrey[700],
                       disabledBackgroundColor: Colors.blueGrey[800],
-                      elevation: tienePendientes ? 4 : 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -100,8 +94,9 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final ventas = snapshot.data!;
-        if (ventas.isEmpty)
+        if (ventas.isEmpty) {
           return const Center(child: Text("No hay ventas hoy"));
+        }
         return ListView.builder(
           padding: const EdgeInsets.all(10),
           itemCount: ventas.length,
@@ -138,23 +133,16 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final resumen = snapshot.data!;
-        
-        double totalEfectivoCaja = 0;
-        double totalFiadosPendientes = 0;
-        double totalGananciaRealEnMano = 0;
-
-        for (var item in resumen) {
-          double ventaTotalTeorica = item.capitalTotal + item.gananciaTotal;
-          double pagadoEfectivo = ventaTotalTeorica - item.deudaPendiente;
-          double factorCobrado = (ventaTotalTeorica > 0)
-              ? (pagadoEfectivo / ventaTotalTeorica)
-              : 0;
-
-          totalEfectivoCaja += pagadoEfectivo;
-          totalFiadosPendientes += item.deudaPendiente;
-          totalGananciaRealEnMano += item.gananciaTotal * factorCobrado;
+        double totalEfectivo = 0;
+        double totalFiado = 0;
+        double totalGanancia = 0;
+        for (var i in resumen) {
+          double totalT = i.capitalTotal + i.gananciaTotal;
+          double factor = totalT > 0 ? (totalT - i.deudaPendiente) / totalT : 0;
+          totalEfectivo += (totalT - i.deudaPendiente);
+          totalFiado += i.deudaPendiente;
+          totalGanancia += i.gananciaTotal * factor;
         }
-
         return Column(
           children: [
             Container(
@@ -163,19 +151,11 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _columnaTotal(
-                    "EN CAJA",
-                    totalEfectivoCaja,
-                    Colors.greenAccent,
-                  ),
-                  _columnaTotal(
-                    "FIADOS",
-                    totalFiadosPendientes,
-                    Colors.orangeAccent,
-                  ),
+                  _columnaTotal("EN CAJA", totalEfectivo, Colors.greenAccent),
+                  _columnaTotal("FIADOS", totalFiado, Colors.orangeAccent),
                   _columnaTotal(
                     "GANANCIA REAL",
-                    totalGananciaRealEnMano,
+                    totalGanancia,
                     Colors.blueAccent,
                   ),
                 ],
@@ -187,31 +167,27 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                 itemCount: resumen.length,
                 separatorBuilder: (c, i) => const Divider(),
                 itemBuilder: (context, index) {
-                  final item = resumen[index];
-                  double ventaTotalTeorica =
-                      item.capitalTotal + item.gananciaTotal;
-                  double pagadoEfectivo =
-                      ventaTotalTeorica - item.deudaPendiente;
-                  double factorCobrado = (ventaTotalTeorica > 0)
-                      ? (pagadoEfectivo / ventaTotalTeorica)
+                  final i = resumen[index];
+                  double totalT = i.capitalTotal + i.gananciaTotal;
+                  double factor = totalT > 0
+                      ? (totalT - i.deudaPendiente) / totalT
                       : 0;
-
-                  double gananciaEnCaja = item.gananciaTotal * factorCobrado;
-                  double capitalEnCaja = item.capitalTotal * factorCobrado;
+                  
+                  double gananciaEnCaja = i.gananciaTotal * factor;
+                  double capitalEnCaja = i.capitalTotal * factor;
 
                   return Container(
                     padding: const EdgeInsets.symmetric(
                       vertical: 12,
-                      horizontal: 8,
+                      horizontal: 15,
                     ),
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         CircleAvatar(
                           backgroundColor: Colors.blueGrey[100],
                           radius: 18,
                           child: Text(
-                            '${item.cantidadTotal}',
+                            '${i.cantidadTotal}',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.blueGrey,
@@ -219,13 +195,13 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 15),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                item.nombre,
+                                i.nombre,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
@@ -233,7 +209,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                "En Caja: \$${pagadoEfectivo.toStringAsFixed(2)}",
+                                "Caja: \$${(totalT - i.deudaPendiente).toStringAsFixed(2)}",
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: Colors.green[700],
@@ -262,7 +238,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                                 fontSize: 11,
                               ),
                             ),
-                            if (item.deudaPendiente > 0)
+                            if (i.deudaPendiente > 0)
                               Container(
                                 margin: const EdgeInsets.only(top: 4),
                                 padding: const EdgeInsets.symmetric(
@@ -274,7 +250,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
-                                  "Debe: \$${item.deudaPendiente.toStringAsFixed(2)}",
+                                  "Debe: \$${i.deudaPendiente.toStringAsFixed(2)}",
                                   style: const TextStyle(
                                     color: Colors.red,
                                     fontSize: 10,
@@ -300,11 +276,12 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
     return StreamBuilder<List<VentaConDetalles>>(
       stream: db.watchCarteraFiadosPendientes(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
+        
         final fiados = snapshot.data!;
         if (fiados.isEmpty) return const Center(child: Text("✅ Todo pagado"));
-
         return ListView.builder(
           padding: const EdgeInsets.all(10),
           itemCount: fiados.length,
@@ -329,25 +306,21 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                     .map(
                       (d) => ListTile(
                         title: Text(d.nombre),
-                        subtitle: Text(
-                          "\$${d.precioVentaUnitario.toStringAsFixed(2)}",
-                        ),
                         trailing: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
                           ),
                           onPressed: () async {
-                            final messenger = ScaffoldMessenger.of(context);
                             await db.cobrarProductoFiado(d.detalleId);
-                            if (!mounted) return;
-                            setState(() {});
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text('✅ Cobro registrado'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('✅ Cobro registrado'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
                           },
                           child: const Text("COBRAR"),
                         ),

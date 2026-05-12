@@ -14,7 +14,7 @@ class SalesRepository {
 
       await db.into(db.ventas).insert(VentasCompanion.insert(
         id: ventaId,
-        fecha: Value(DateTime.now()),
+        fecha: DateTime.now(),
         total: total,
         sincronizado: const Value(false),
       ));
