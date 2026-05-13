@@ -12,6 +12,28 @@ class DailySummaryScreen extends StatefulWidget {
 }
 
 class _DailySummaryScreenState extends State<DailySummaryScreen> {
+  bool _isSyncing = false;
+
+  Future<void> _handleSync(SyncService syncService) async {
+    setState(() => _isSyncing = true);
+    try {
+      await syncService.sincronizacionCompletaSegura();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Sincronización exitosa')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final db = Provider.of<AppDatabase>(context);
@@ -47,16 +69,28 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                 builder: (context, snapshot) {
                   final pendientes = snapshot.data ?? 0;
                   final bool tienePendientes = pendientes > 0;
+                  
                   return ElevatedButton.icon(
-                    onPressed: tienePendientes
-                        ? () => syncService.sincronizacionCompletaSegura()
+                    onPressed: (tienePendientes && !_isSyncing)
+                        ? () => _handleSync(syncService)
                         : null,
-                    icon: Icon(
-                      Icons.cloud_upload,
-                      color: tienePendientes ? Colors.white : Colors.white38,
-                    ),
+                    icon: _isSyncing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Icon(
+                            Icons.cloud_upload,
+                            color: tienePendientes
+                                ? Colors.white
+                                : Colors.white38,
+                          ),
                     label: Text(
-                      'SINCRONIZAR ($pendientes)',
+                      _isSyncing ? 'ESPERE...' : 'SINCRONIZAR ($pendientes)',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: tienePendientes ? Colors.white : Colors.white38,
@@ -66,7 +100,9 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                       backgroundColor: tienePendientes
                           ? Colors.blue
                           : Colors.blueGrey[700],
-                      disabledBackgroundColor: Colors.blueGrey[800],
+                      disabledBackgroundColor: _isSyncing
+                          ? Colors.blue
+                          : Colors.blueGrey[800],
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -172,7 +208,6 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
                   double factor = totalT > 0
                       ? (totalT - i.deudaPendiente) / totalT
                       : 0;
-                  
                   double gananciaEnCaja = i.gananciaTotal * factor;
                   double capitalEnCaja = i.capitalTotal * factor;
 
@@ -279,9 +314,10 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        
         final fiados = snapshot.data!;
-        if (fiados.isEmpty) return const Center(child: Text("✅ Todo pagado"));
+        if (fiados.isEmpty) {
+          return const Center(child: Text("✅ Todo pagado"));
+        }
         return ListView.builder(
           padding: const EdgeInsets.all(10),
           itemCount: fiados.length,
