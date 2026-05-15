@@ -280,54 +280,90 @@ class _PosScreenState extends State<PosScreen> {
               separatorBuilder: (c, i) => const Divider(height: 1),
               itemBuilder: (context, i) {
                 final item = _cart[i];
-                return ListTile(
-                  title: Text(
-                    item.producto.nombre,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                return Container(
+                  height:
+                      70,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey.shade200),
+                    ),
                   ),
-                  subtitle: Text(
-                    '\$${item.producto.precio.toStringAsFixed(2)}',
-                  ),
-                  trailing: Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            item.pagado
-                                ? Icons.check_circle
-                                : Icons.warning_amber_rounded,
-                            color: item.pagado ? Colors.green : Colors.orange,
-                            size: 30,
-                          ),
-                          Text(
-                            item.pagado ? "PAGADO" : "FIADO",
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: item.pagado ? Colors.green : Colors.orange,
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.producto.nombre,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 5),
-                      IconButton(
-                        icon: Icon(
-                          item.pagado ? Icons.toggle_on : Icons.toggle_off,
-                          color: item.pagado ? Colors.green : Colors.grey,
-                          size: 40,
+                            Text(
+                              '\$${item.producto.precio.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
-                        onPressed: () =>
-                            setState(() => item.pagado = !item.pagado),
                       ),
-                      const SizedBox(width: 5),
+
+                      SizedBox(
+                        width: 65,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              item.pagado
+                                  ? Icons.check_circle
+                                  : Icons.warning_amber_rounded,
+                              color: item.pagado ? Colors.green : Colors.orange,
+                              size: 22,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.pagado ? "PAGADO" : "FIADO",
+                              style: TextStyle(
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                                color: item.pagado
+                                    ? Colors.green
+                                    : Colors.orange,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      Center(
+                        child: Transform.scale(
+                          scale:
+                              0.8,
+                          child: Switch(
+                            value: item.pagado,
+                            activeThumbColor: Colors.green,
+                            onChanged: (v) => setState(() => item.pagado = v),
+                          ),
+                        ),
+                      ),
+
                       IconButton(
+                        onPressed: () => setState(() => _cart.removeAt(i)),
                         icon: const Icon(
                           Icons.delete_outline,
                           color: Colors.redAccent,
+                          size: 22,
                         ),
-                        onPressed: () => setState(() => _cart.removeAt(i)),
+                        visualDensity: VisualDensity.compact,
                       ),
                     ],
                   ),
